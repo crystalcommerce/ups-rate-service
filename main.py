@@ -1307,15 +1307,19 @@ async def get_metrics(_: bool = Depends(verify_api_key)) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # Optimized server configuration
+    # Production-optimized server configuration for Digital Ocean
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
         port=int(os.getenv("PORT", "8000")),
-        workers=int(os.getenv("WORKERS", "4")) if not Config.DEBUG else 1,
-        access_log=Config.DEBUG,
+        workers=int(os.getenv("WORKERS", "1")),  # Single worker for basic plan
+        access_log=not Config.DEBUG,  # Enable access logs in production
         log_level=Config.LOG_LEVEL.lower(),
         reload=Config.DEBUG,
         loop="uvloop" if not Config.DEBUG else "asyncio",
-        http="httptools" if not Config.DEBUG else "h11"
+        http="httptools" if not Config.DEBUG else "h11",
+        # Digital Ocean App Platform optimizations
+        timeout_keep_alive=65,  # Longer than DO's 60s timeout
+        limit_concurrency=100,  # Reasonable limit for basic plan
+        limit_max_requests=1000  # Restart worker after 1000 requests
     )
