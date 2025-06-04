@@ -1,0 +1,12 @@
+name: ups-microservice
+services:
+- name: web
+  environment_slug: python
+  instance_size_slug: basic-xxs
+  envs:
+  - key: UPS_CLIENT_ID
+    type: SECRET
+  - key: UPS_CLIENT_SECRET
+    type: SECRET
+  - key: UPS_ENVIRONMENT
+    value: production

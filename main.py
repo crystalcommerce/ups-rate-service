@@ -10,29 +10,12 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 
-try:
-    import orjson
-    USE_ORJSON = True
-except ImportError:
-    USE_ORJSON = False
-
 from fastapi import FastAPI, HTTPException, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.middleware.gzip import GZipMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, validator
 import uvicorn
-
-# Custom JSON Response for performance
-class ORJSONResponse(Response):
-    media_type = "application/json"
-    
-    def render(self, content: Any) -> bytes:
-        if USE_ORJSON:
-            return orjson.dumps(content, option=orjson.OPT_NON_STR_KEYS)
-        else:
-            return json.dumps(content, ensure_ascii=False, separators=(',', ':')).encode()
 
 # Configure production logging
 logging.basicConfig(
@@ -974,39 +957,16 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="UPS Rating Microservice",
-    description="""Production-ready UPS Rating API with Ruby UPSRateRequest compatibility.
-    
-    **Features:**
-    - Full compatibility with Ruby UPSRateRequest class
-    - Support for all UPS service types and package types
-    - Comprehensive error handling and validation
-    - Health checks and monitoring endpoints
-    
-    **Key Endpoints:**
-    - `/rates` - Get shipping rates
-    - `/health` - Service health check
-    - `/metrics` - Service metrics
-    """,
+    description="UPS Rating API",
     version="1.0.0",
-    docs_url="/docs" if Config.DEBUG else None,
-    redoc_url="/redoc" if Config.DEBUG else None,
-    default_response_class=ORJSONResponse,
     lifespan=lifespan
 )
 
-# Middleware - optimized for production
-if Config.DEBUG:
-    # Development CORS - allow all
-    app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-else:
-    # Production CORS - more restrictive
-    allowed_origins = os.getenv("ALLOWED_ORIGINS", "*").split(",")
-    app.add_middleware(CORSMiddleware, 
-                      allow_origins=allowed_origins, 
-                      allow_methods=["GET", "POST"], 
-                      allow_headers=["Authorization", "Content-Type"])
-
-app.add_middleware(GZipMiddleware, minimum_size=500)
+# CORS middleware
+app.add_middleware(CORSMiddleware, 
+                  allow_origins=["*"], 
+                  allow_methods=["GET", "POST"], 
+                  allow_headers=["*"])
 
 # Security
 security = HTTPBearer(auto_error=False)
@@ -1307,19 +1267,8 @@ async def get_metrics(_: bool = Depends(verify_api_key)) -> Dict[str, Any]:
 
 
 if __name__ == "__main__":
-    # Production-optimized server configuration for Digital Ocean
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=int(os.getenv("PORT", "8000")),
-        workers=int(os.getenv("WORKERS", "1")),  # Single worker for basic plan
-        access_log=not Config.DEBUG,  # Enable access logs in production
-        log_level=Config.LOG_LEVEL.lower(),
-        reload=Config.DEBUG,
-        loop="uvloop" if not Config.DEBUG else "asyncio",
-        http="httptools" if not Config.DEBUG else "h11",
-        # Digital Ocean App Platform optimizations
-        timeout_keep_alive=65,  # Longer than DO's 60s timeout
-        limit_concurrency=100,  # Reasonable limit for basic plan
-        limit_max_requests=1000  # Restart worker after 1000 requests
+        port=int(os.getenv("PORT", "8000"))
     )
