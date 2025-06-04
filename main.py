@@ -1203,30 +1203,7 @@ async def validate_request(
 
 
 # Health and monitoring
-@app.get("/health", summary="Health check")
-async def health_check() -> Dict[str, Any]:
-    """
-    Health check endpoint with UPS API connectivity test.
-    """
-    try:
-        # Test OAuth connectivity
-        token = await token_manager.get_token()
-        ups_status = "healthy"
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        ups_status = "unhealthy"
-    
-    return {
-        "status": ups_status,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "environment": Config.UPS_ENVIRONMENT,
-        "version": "1.0.0",
-        "ruby_compatible": True,
-        "dependencies": {
-            "ups_oauth": ups_status,
-            "ups_rating_api": ups_status
-        }
-    }
+# Duplicate health endpoint removed - using the comprehensive one above
 
 @app.get("/metrics", summary="Service metrics")
 async def get_metrics(_: bool = Depends(verify_api_key)) -> Dict[str, Any]:
