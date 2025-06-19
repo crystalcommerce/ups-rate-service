@@ -1,0 +1,84 @@
+version: "1"
+pipelines:
+  - name: ups-microservice-pipeline:1.0
+    description: build a release for deployment
+    env:
+      static:
+        - DEBIAN_FRONTEND=noninteractive
+        - STACK_TYPE=do-k8s
+        - ORG=crystalcommerce
+        - REPO=ups-rate-service
+      secrets:
+        - GITHUB_TOKEN
+        - DO_TOKEN
+        - UPS_CLIENT_ID
+        - UPS_CLIENT_SECRET
+        - API_KEY
+    events: #only remote
+      - "github:crystalcommerce/ups-microservice:pull_request.merged" #Remote only
+      - "github:crystalcommerce/ups-microservice:tag.created" #Remote only
+    jobs:
+      - name: ups-microservice-build-job
+        description: Build UPS Microservice image
+        packages:
+          - git
+          - unzip
+          - python
+          - wget
+          - tar
+        steps:
+          - wget `https://github.com/digitalocean/doctl/releases/download/v1.102.0/doctl-1.102.0-linux-amd64.tar.gz`
+          - tar xf ./doctl-1.102.0-linux-amd64.tar.gz
+          - ./doctl version
+          - git clone `https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO` #only remote
+          - cd $REPO && ls -asl
+          - git fetch && git checkout $REF
+          - docker build -f Dockerfile -t $REPO-$STACK_TYPE:$REF .
+          - ../doctl auth init -t $DO_TOKEN
+          - ../doctl registry login
+          - docker tag $REPO-$STACK_TYPE:$REF registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF
+          - docker push registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF
+
+  - name: ups-microservice-pipeline-local:1.0
+    description: build a UPS Microservice release for deployment locally (useful for big images)
+    env:
+      static:
+        - DEBIAN_FRONTEND=noninteractive
+        - STACK_TYPE=do-k8s
+        - ORG=crystalcommerce
+        - REPO=ups-microservice
+        - REF=CUSTOM
+      secrets:
+        - GITHUB_TOKEN
+        - DO_TOKEN
+        - UPS_CLIENT_ID
+        - UPS_CLIENT_SECRET
+        - API_KEY
+    jobs:
+      - name: ups-microservice-local-build-job
+        description: Build UPS Microservice image
+        packages:
+          - git
+          - unzip
+          - python
+          - wget
+          - tar
+          - jq
+        steps:
+          - whoami
+          - wget `https://github.com/digitalocean/doctl/releases/download/v1.102.0/doctl-1.102.0-linux-amd64.tar.gz`
+          - tar xf ./doctl-1.102.0-linux-amd64.tar.gz
+          - ./doctl version
+          - git clone `https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO` #only remote
+          - cd $REPO && ls -asl #only remote
+          - RAW_BRANCH_LIST=`curl -s -X GET -H "Accept:application/vnd.github+json" -H "Authorization:token $GITHUB_TOKEN" `https://api.github.com/repos/$ORG/$REPO/branches` | jq '.[] | .name' | head -n 20 | awk '{print}' ORS="' '" | sed 's/"//g'`
+          - echo "ux prompt list '$RAW_BRANCH_LIST$REF' --message='Select the repository branch to build' --name='reference'" >> /tmp/ux.sh && chmod 755 /tmp/ux.sh #only remote
+          - if [ "${REF}" = "CUSTOM" ]; then REF=`/tmp/ux.sh`; fi #only remote
+          - if [ "${REF}" = "CUSTOM" ]; then REF=`ux prompt input --message='Enter the repository branch to build' --name='reference'`; fi && echo "Going to checkout $REF" #only remote
+          - git fetch && git checkout $REF #only remote
+#          - cd application && ls -asl #only locally
+          - docker build -f Dockerfile -t $REPO-$STACK_TYPE:$REF .
+          - ../doctl auth init -t $DO_TOKEN
+          - ../doctl registry login
+          - docker tag $REPO-$STACK_TYPE:$REF registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF
+          - docker push registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF
