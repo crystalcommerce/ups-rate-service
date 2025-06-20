@@ -15,9 +15,9 @@ pipelines:
         - UPS_CLIENT_ID
         - UPS_CLIENT_SECRET
         - API_KEY
-    events: #only remote
-      - "github:crystalcommerce/ups-microservice:pull_request.merged" #Remote only
-      - "github:crystalcommerce/ups-microservice:tag.created" #Remote only
+    events:
+      - "github:crystalcommerce/ups-rate-service:pull_request.merged"
+      - "github:crystalcommerce/ups-rate-service:tag.created"
     jobs:
       - name: ups-microservice-build-job
         description: Build UPS Microservice image
