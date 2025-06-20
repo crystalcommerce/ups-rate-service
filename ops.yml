@@ -27,10 +27,10 @@ pipelines:
           - wget
           - tar
         steps:
-          - wget `https://github.com/digitalocean/doctl/releases/download/v1.102.0/doctl-1.102.0-linux-amd64.tar.gz`
+          - wget https://github.com/digitalocean/doctl/releases/download/v1.102.0/doctl-1.102.0-linux-amd64.tar.gz
           - tar xf ./doctl-1.102.0-linux-amd64.tar.gz
           - ./doctl version
-          - git clone `https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO` #only remote
+          - git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO #only remote
           - cd $REPO && ls -asl
           - git fetch && git checkout $REF
           - docker build -f Dockerfile -t $REPO-$STACK_TYPE:$REF .
@@ -46,7 +46,7 @@ pipelines:
         - DEBIAN_FRONTEND=noninteractive
         - STACK_TYPE=do-k8s
         - ORG=crystalcommerce
-        - REPO=ups-microservice
+        - REPO=ups-rate-service
         - REF=CUSTOM
       secrets:
         - GITHUB_TOKEN
@@ -66,12 +66,12 @@ pipelines:
           - jq
         steps:
           - whoami
-          - wget `https://github.com/digitalocean/doctl/releases/download/v1.102.0/doctl-1.102.0-linux-amd64.tar.gz`
+          - wget https://github.com/digitalocean/doctl/releases/download/v1.102.0/doctl-1.102.0-linux-amd64.tar.gz
           - tar xf ./doctl-1.102.0-linux-amd64.tar.gz
           - ./doctl version
-          - git clone `https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO` #only remote
+          - git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO #only remote
           - cd $REPO && ls -asl #only remote
-          - RAW_BRANCH_LIST=`curl -s -X GET -H "Accept:application/vnd.github+json" -H "Authorization:token $GITHUB_TOKEN" `https://api.github.com/repos/$ORG/$REPO/branches` | jq '.[] | .name' | head -n 20 | awk '{print}' ORS="' '" | sed 's/"//g'`
+          - RAW_BRANCH_LIST=$(curl -s -X GET -H "Accept:application/vnd.github+json" -H "Authorization:token $GITHUB_TOKEN" https://api.github.com/repos/$ORG/$REPO/branches | jq '.[] | .name' | head -n 20 | awk '{print}' ORS="' '" | sed 's/"//g')
           - echo "ux prompt list '$RAW_BRANCH_LIST$REF' --message='Select the repository branch to build' --name='reference'" >> /tmp/ux.sh && chmod 755 /tmp/ux.sh #only remote
           - if [ "${REF}" = "CUSTOM" ]; then REF=`/tmp/ux.sh`; fi #only remote
           - if [ "${REF}" = "CUSTOM" ]; then REF=`ux prompt input --message='Enter the repository branch to build' --name='reference'`; fi && echo "Going to checkout $REF" #only remote
