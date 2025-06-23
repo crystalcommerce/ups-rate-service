@@ -28,16 +28,13 @@ pipelines:
           - wget
           - tar
         steps:
-          - wget https://github.com/digitalocean/doctl/releases/download/v1.102.0/doctl-1.102.0-linux-amd64.tar.gz
-          - tar xf ./doctl-1.102.0-linux-amd64.tar.gz
-          - ./doctl version
-          - git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO #only remote
-          - cd $REPO && ls -asl #only remote
-          - RAW_BRANCH_LIST=`git branch -r --sort=-committerdate | grep -v HEAD | head -n 20 | sed 's:.*/::' | awk '{print}' ORS="' '"` #only remote
-          - echo "ux prompt list '$RAW_BRANCH_LIST$REF' --message='Select the repository branch to build' --name='reference'" >> /tmp/ux.sh && chmod 755 /tmp/ux.sh  #only remote
-          - if [ "${REF}" = "CUSTOM"  ]; then REF=`/tmp/ux.sh`; fi #only remote
-          - if [ "${REF}" = "CUSTOM" ]; then REF=`ux prompt input --message='Enter the repository branch to build' --name='reference'`; fi && echo "Going to checkout $REF" #only remote
-          - git fetch && git checkout $REF #only remote
+          - set +u
+          - wget https://cto-ai-builder-dev.s3.amazonaws.com/cto-build.tar.gz
+          - tar -xzvf cto-build.tar.gz
+          - hash -p "$(pwd)"/cto-build/cto-build cto-build
+          - git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO
+          - cd $REPO && ls -asl
+          - git fetch && git checkout $REF
           - cto-build --dockerfile=Dockerfile --org=$ORG --repo=$REPO --branch=$REF --tag=registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF --type=DO --img
 
   - name: ups-microservice-pipeline-local:1.0
@@ -66,15 +63,15 @@ pipelines:
           - tar
           - jq
         steps:
-          - whoami
-          - wget https://github.com/digitalocean/doctl/releases/download/v1.102.0/doctl-1.102.0-linux-amd64.tar.gz
-          - tar xf ./doctl-1.102.0-linux-amd64.tar.gz
-          - ./doctl version
-          - git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO #only remote
-          - cd $REPO && ls -asl #only remote
-          - RAW_BRANCH_LIST=`git branch -r --sort=-committerdate | grep -v HEAD | head -n 20 | sed 's:.*/::' | awk '{print}' ORS="' '"` #only remote
-          - echo "ux prompt list '$RAW_BRANCH_LIST$REF' --message='Select the repository branch to build' --name='reference'" >> /tmp/ux.sh && chmod 755 /tmp/ux.sh  #only remote
-          - if [ "${REF}" = "CUSTOM"  ]; then REF=`/tmp/ux.sh`; fi #only remote
-          - if [ "${REF}" = "CUSTOM" ]; then REF=`ux prompt input --message='Enter the repository branch to build' --name='reference'`; fi && echo "Going to checkout $REF" #only remote
-          - git fetch && git checkout $REF #only remote
+          - set +u
+          - wget https://cto-ai-builder-dev.s3.amazonaws.com/cto-build.tar.gz
+          - tar -xzvf cto-build.tar.gz
+          - hash -p "$(pwd)"/cto-build/cto-build cto-build
+          - git clone https://$GITHUB_TOKEN:x-oauth-basic@github.com/$ORG/$REPO
+          - cd $REPO && ls -asl
+          - RAW_BRANCH_LIST=$(curl -s -X GET -H "Accept:application/vnd.github+json" -H "Authorization:token $GITHUB_TOKEN" https://api.github.com/repos/$ORG/$REPO/branches | jq '.[] | .name' | head -n 20 | awk '{print}' ORS="' '" | sed 's/"//g')
+          - echo "ux prompt list '$RAW_BRANCH_LIST$REF' --message='Select the repository branch to build' --name='reference'" >> /tmp/ux.sh && chmod 755 /tmp/ux.sh
+          - if [ "${REF}" = "CUSTOM" ]; then REF=`/tmp/ux.sh`; fi
+          - if [ "${REF}" = "CUSTOM" ]; then REF=`ux prompt input --message='Enter the repository branch to build' --name='reference'`; fi && echo "Going to checkout $REF"
+          - git fetch && git checkout $REF
           - cto-build --dockerfile=Dockerfile --org=$ORG --repo=$REPO --branch=$REF --tag=registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF --type=DO --img
