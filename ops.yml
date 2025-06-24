@@ -1,0 +1,39 @@
+version: "1"
+pipelines:
+  - name: ups-rate-service:0.1.0
+    description: build a release for deployment
+    env:
+      static:
+        - DEBIAN_FRONTEND=noninteractive
+        - STACK_TYPE=do-k8s
+        - ORG=crystalcommerce
+        - REPO=ups-rate-service
+        - APP_NAME=ups-rate-service
+      secrets:
+        - GITHUB_TOKEN
+        - DO_TOKEN
+
+    events:
+      - "github:crystalcommerce/ups-rate-service:pull_request.merged"
+      - "github:crystalcommerce/ups-rate-service:tag.created"
+    jobs:
+      - name: ups-rate-service-build-job
+        description: build ups-rate-service image
+        packages:
+          - git
+          - unzip
+          - python
+          - wget
+          - tar
+          - jq
+        steps:
+          - set +u
+          - wget https://cto-ai-builder-dev.s3.amazonaws.com/cto-build.tar.gz
+          - tar -xzvf cto-build.tar.gz
+          - hash -p "$(pwd)"/cto-build/cto-build cto-build
+          - RAW_BRANCH_LIST=`curl -s -X GET -H "Accept:application/vnd.github+json" -H "Authorization:token $GITHUB_TOKEN"  https://api.github.com/repos/$ORG/$REPO/branches | jq '.[] | .name' | head -n 20 | awk '{print}' ORS="' '" | sed 's/"//g'`
+          - echo "ux prompt list '${RAW_BRANCH_LIST}CUSTOM' --message='Select the repository branch to build' --name='reference'" >> /tmp/ux.sh && chmod 755 /tmp/ux.sh  #only remote
+          - if [ -z $REF ]; then REF=`/tmp/ux.sh`; fi
+          - if [ "${REF}" = "CUSTOM" ]; then REF=`ux prompt input --message='Enter the repository branch to build' --name='reference'`; fi && echo "Going to checkout $REF" #only remote
+          - cto-build --dockerfile=Dockerfile --org=$ORG --repo=$REPO --branch=$REF --tag=registry.digitalocean.com/$ORG/$APP_NAME-$STACK_TYPE:$REF --type=DO --img --build-opts="--build-arg GITHUB_TOKEN=\"${GITHUB_TOKEN}\""
+  
