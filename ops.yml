@@ -30,7 +30,7 @@ pipelines:
           - cd $REPO
           - git fetch && git checkout $REF
           - echo $DO_TOKEN | docker login registry.digitalocean.com -u $DO_TOKEN --password-stdin
-          - docker build --pull -t registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF .
+          - docker build -t registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF .
           - docker push registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF
 
   - name: ups-microservice-pipeline-local:1.0
@@ -66,5 +66,5 @@ pipelines:
           - if [ "${REF}" = "CUSTOM" ]; then REF=`ux prompt input --message='Enter the repository branch to build' --name='reference'`; fi && echo "Going to checkout $REF"
           - git fetch && git checkout $REF
           - echo $DO_TOKEN | docker login registry.digitalocean.com -u $DO_TOKEN --password-stdin
-          - docker build --pull -t registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF .
+          - docker build -t registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF .
           - docker push registry.digitalocean.com/$ORG/$REPO-$STACK_TYPE:$REF
