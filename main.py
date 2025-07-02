@@ -29,9 +29,9 @@ logger = logging.getLogger(__name__)
 
 # Configuration
 class Config:
-    CLIENT_ID = os.getenv("UPS_CLIENT_ID", "")
-    CLIENT_SECRET = os.getenv("UPS_CLIENT_SECRET", "")
-    UPS_ENVIRONMENT = os.getenv("UPS_ENVIRONMENT", "sandbox").lower()
+    CLIENT_ID = os.getenv("APP_CONFIG_UPS_CLIENT_ID", os.getenv("UPS_CLIENT_ID", ""))
+    CLIENT_SECRET = os.getenv("APP_CONFIG_UPS_CLIENT_SECRET", os.getenv("UPS_CLIENT_SECRET", ""))
+    UPS_ENVIRONMENT = os.getenv("APP_CONFIG_UPS_ENVIRONMENT", os.getenv("UPS_ENVIRONMENT", "production")).lower()
     
 
     
@@ -43,7 +43,7 @@ class Config:
     # Production settings
     DEBUG = os.getenv("DEBUG", "false").lower() == "true"
     LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-    API_KEY = os.getenv("API_KEY", "")
+    API_KEY = os.getenv("APP_CONFIG_UPS_API_KEY", os.getenv("API_KEY", ""))
     
     # Set URLs based on environment
     if UPS_ENVIRONMENT == "production":
