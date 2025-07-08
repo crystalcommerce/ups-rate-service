@@ -237,6 +237,9 @@ class UPSConstants:
 # Initialize configuration
 try:
     Config.validate()
+    # Temporarily add this to see if env vars are loaded
+    logger.info(f"CLIENT_ID length: {len(Config.CLIENT_ID) if Config.CLIENT_ID else 0}")
+    logger.info(f"CLIENT_SECRET length: {len(Config.CLIENT_SECRET) if Config.CLIENT_SECRET else 0}")
     logger.info(f"Configuration loaded - Environment: {Config.UPS_ENVIRONMENT}")
 except ValueError as e:
     logger.error(f"Configuration error: {e}")
