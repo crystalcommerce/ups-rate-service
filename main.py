@@ -281,6 +281,12 @@ class TokenManager:
             return self._cache["access_token"]
     
     async def _request_token(self) -> Dict[str, Any]:
+        # Debug logging for credential validation
+        logger.info(f"OAuth Debug - CLIENT_ID length: {len(Config.CLIENT_ID) if Config.CLIENT_ID else 0}")
+        logger.info(f"OAuth Debug - CLIENT_SECRET length: {len(Config.CLIENT_SECRET) if Config.CLIENT_SECRET else 0}")
+        if Config.CLIENT_ID:
+            logger.info(f"OAuth Debug - CLIENT_ID starts with: {Config.CLIENT_ID[:8]}...")
+        
         credentials = f"{Config.CLIENT_ID}:{Config.CLIENT_SECRET}"
         encoded_credentials = base64.b64encode(credentials.encode()).decode()
         
