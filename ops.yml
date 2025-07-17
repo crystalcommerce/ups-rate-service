@@ -12,6 +12,8 @@ pipelines:
       secrets:
         - GITHUB_TOKEN
         - DO_TOKEN
+        - API_URL
+        - BUILDER_TOKEN
 
     events:
       - "github:crystalcommerce/ups-rate-service:pull_request.merged"
