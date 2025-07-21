@@ -1,6 +1,6 @@
 version: "1"
 pipelines:
-  - name: ups-rate-service:0.1.0
+  - name: ups-rate-service:0.1.1
     description: build a release for deployment
     env:
       static:
