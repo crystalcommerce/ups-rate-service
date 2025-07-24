@@ -242,8 +242,18 @@ except ValueError as e:
     logger.error(f"Configuration error: {e}")
     raise
 
-# Set logging level
-logging.getLogger().setLevel(getattr(logging, Config.LOG_LEVEL))
+# Set logging level with validation
+try:
+    log_level = Config.LOG_LEVEL.strip() if Config.LOG_LEVEL else "INFO"
+    if hasattr(logging, log_level):
+        logging.getLogger().setLevel(getattr(logging, log_level))
+        logger.info(f"Logging level set to: {log_level}")
+    else:
+        logging.getLogger().setLevel(logging.INFO)
+        logger.warning(f"Invalid log level '{log_level}', defaulting to INFO")
+except Exception as e:
+    logging.getLogger().setLevel(logging.INFO)
+    logger.error(f"Error setting log level: {e}, defaulting to INFO")
 
 # Custom exceptions
 class UPSAPIError(Exception):
