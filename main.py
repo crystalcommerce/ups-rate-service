@@ -61,8 +61,33 @@ class Config:
         if not cls.CLIENT_ID or not cls.CLIENT_SECRET:
             raise ValueError("UPS_CLIENT_ID and UPS_CLIENT_SECRET environment variables are required")
         
-        logger.info(f"UPS Configuration: Environment={cls.UPS_ENVIRONMENT}, CLIENT_ID={'***' if cls.CLIENT_ID else 'MISSING'}, CLIENT_SECRET={'***' if cls.CLIENT_SECRET else 'MISSING'}")
+        client_id_status = '***' if cls.CLIENT_ID else 'MISSING'
+        client_secret_status = '***' if cls.CLIENT_SECRET else 'MISSING'
+        logger.info(f"UPS Configuration: Environment={cls.UPS_ENVIRONMENT}, CLIENT_ID={client_id_status}, CLIENT_SECRET={client_secret_status}")
         logger.info(f"UPS URLs: OAuth={cls.OAUTH_URL}, Rate={cls.RATE_URL}")
+
+class USPSConfig:
+    CLIENT_ID = os.getenv("USPS_CLIENT_ID", "")
+    CLIENT_SECRET = os.getenv("USPS_CLIENT_SECRET", "")
+
+    REQUEST_TIMEOUT = int(os.getenv("USPS_REQUEST_TIMEOUT", "30"))
+    MAX_RETRIES = int(os.getenv("USPS_MAX_RETRIES", "3"))
+
+    OAUTH_URL = os.getenv("USPS_OAUTH_URL", "https://apis.usps.com/oauth2/v3/token")
+    ADDRESS_VALIDATION_URL = os.getenv("USPS_ADDRESS_VALIDATION_URL", "https://apis.usps.com/addresses/v3/zipcode")
+    DOMESTIC_RATES_URL = os.getenv("USPS_DOMESTIC_RATES_URL", "https://apis.usps.com/prices/v3/total-rates/search")
+    INTERNATIONAL_RATES_URL = os.getenv("USPS_INTERNATIONAL_RATES_URL", "https://apis.usps.com/international-prices/v3/total-rates/search")
+
+    @classmethod
+    def validate(cls):
+        """Validate required configuration"""
+        if not cls.CLIENT_ID or not cls.CLIENT_SECRET:
+            logger.warning("USPS_CLIENT_ID and USPS_CLIENT_SECRET environment variables not set - USPS endpoints will not work")
+        else:
+            client_id_status = '***' if cls.CLIENT_ID else 'MISSING'
+            client_secret_status = '***' if cls.CLIENT_SECRET else 'MISSING'
+            logger.info(f"USPS Configuration: CLIENT_ID={client_id_status}, CLIENT_SECRET={client_secret_status}")
+            logger.info(f"USPS URLs: OAuth={cls.OAUTH_URL}, Address={cls.ADDRESS_VALIDATION_URL}, Domestic Rates={cls.DOMESTIC_RATES_URL}, International Rates={cls.INTERNATIONAL_RATES_URL}")
 
 # UPS Constants
 class UPSConstants:
@@ -242,6 +267,11 @@ except ValueError as e:
     logger.error(f"Configuration error: {e}")
     raise
 
+try:
+    USPSConfig.validate()
+except Exception as e:
+    logger.warning(f"USPS configuration warning: {e}")
+
 # Set logging level with validation
 try:
     log_level = Config.LOG_LEVEL.strip() if Config.LOG_LEVEL else "INFO"
@@ -257,6 +287,13 @@ except Exception as e:
 
 # Custom exceptions
 class UPSAPIError(Exception):
+    def __init__(self, message: str, error_code: str = None, status_code: int = 500):
+        self.message = message
+        self.error_code = error_code
+        self.status_code = status_code
+        super().__init__(self.message)
+
+class USPSAPIError(Exception):
     def __init__(self, message: str, error_code: str = None, status_code: int = 500):
         self.message = message
         self.error_code = error_code
@@ -319,6 +356,70 @@ class TokenManager:
         self._cache["expires_at"] = 0
 
 token_manager = TokenManager()
+
+class USPSTokenManager:
+    def __init__(self):
+        self._cache = {}
+        self._lock = asyncio.Lock()
+
+    async def get_token(self, scope: str = "addresses") -> str:
+        """Get OAuth token for the specified scope. Tokens expire in 8 hours (28800 seconds).
+
+        Valid scopes:
+        - "addresses" - for address validation
+        - "domestic-prices" - for domestic rate calculation
+        - "international-prices" - for international rate calculation
+        """
+        """Get OAuth token for the specified scope. Tokens expire in 8 hours (28800 seconds)."""
+        async with self._lock:
+            current_time = time.time()
+            if scope in self._cache:
+                cached = self._cache[scope]
+                if cached["access_token"] and cached["expires_at"] > current_time:
+                    return cached["access_token"]
+
+            token_data = await self._request_token(scope)
+            expires_in = int(token_data.get("expires_in", 28800))
+
+            self._cache[scope] = {
+                "access_token": token_data["access_token"],
+                "expires_at": current_time + expires_in - 60
+            }
+            return self._cache[scope]["access_token"]
+
+    async def _request_token(self, scope: str) -> Dict[str, Any]:
+        """Request OAuth token using Client Credentials flow"""
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        data = {
+            "grant_type": "client_credentials",
+            "client_id": USPSConfig.CLIENT_ID,
+            "client_secret": USPSConfig.CLIENT_SECRET,
+            "scope": scope
+        }
+        logger.info(f"Requesting USPS OAuth token from: {USPSConfig.OAUTH_URL} with scope: {scope}")
+        async with httpx.AsyncClient(timeout=USPSConfig.REQUEST_TIMEOUT) as client:
+            response = await client.post(USPSConfig.OAUTH_URL, data=data, headers=headers)
+            if response.status_code != 200:
+                logger.error(f"USPS OAuth failed with status {response.status_code}: {response.text}")
+                raise USPSAPIError(f"USPS OAuth failed: {response.status_code}", "AUTH_ERROR", response.status_code)
+            token_data = response.json()
+            if "access_token" not in token_data:
+                logger.error(f"Invalid USPS OAuth response: {token_data}")
+                raise USPSAPIError("Invalid USPS OAuth response", "INVALID_RESPONSE")
+            logger.info("Successfully obtained USPS OAuth token")
+            return token_data
+
+    def invalidate_token(self, scope: str = None):
+        """Invalidate token(s). If scope is None, invalidates all tokens."""
+        if scope:
+            if scope in self._cache:
+                del self._cache[scope]
+        else:
+            self._cache.clear()
+
+usps_token_manager = USPSTokenManager()
 
 # Request/Response Models
 class Address(BaseModel):
@@ -958,6 +1059,273 @@ class UPSRatingService:
             logger.error(f"Failed to parse UPS response: {e}")
             raise UPSAPIError("Failed to parse response", "PARSE_ERROR")
 
+class USPSAddressService:
+    def __init__(self):
+        self.client = None
+
+    async def __aenter__(self):
+        self.client = httpx.AsyncClient(
+            timeout=USPSConfig.REQUEST_TIMEOUT,
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
+        )
+        return self
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.client:
+            await self.client.aclose()
+    async def validate_address(self, street_address: str, city: str, state: str) -> Dict[str, str]:
+        """Validate address and return ZIP code information"""
+        token = await usps_token_manager.get_token(scope="addresses")
+        params = {
+            "streetAddress": street_address,
+            "city": city,
+            "state": state
+        }
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json"
+        }
+        logger.info(f"Validating USPS address: {street_address}, {city}, {state}")
+        for attempt in range(USPSConfig.MAX_RETRIES):
+            try:
+                response = await self.client.get(
+                    USPSConfig.ADDRESS_VALIDATION_URL,
+                    params=params,
+                    headers=headers
+                )
+                if response.status_code == 401:
+                    error_text = response.text
+                    logger.error(f"USPS Address API authentication failed (401). Response: {error_text}")
+                    usps_token_manager.invalidate_token(scope="addresses")
+                    raise USPSAPIError("Authentication failed", "AUTH_ERROR", 401)
+                elif response.status_code != 200:
+                    error_text = response.text
+                    logger.error(f"USPS Address API returned status {response.status_code}: {error_text}")
+                    try:
+                        error_data = response.json()
+                        if "error" in error_data:
+                            error_info = error_data["error"]
+                            error_msg = error_info.get("message", "Unknown error")
+                            error_code = error_info.get("code", "")
+                            raise USPSAPIError(f"USPS API error {error_code}: {error_msg}", error_code, response.status_code)
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to parse USPS error response as JSON: {error_text}")
+                    raise USPSAPIError(f"USPS API error: {response.status_code}", "API_ERROR", response.status_code)
+                response_data = response.json()
+
+                address = response_data.get("address", {})
+                zip_code = address.get("ZIPCode", "")
+                zip_plus4 = address.get("ZIPPlus4")
+
+                result = {
+                    "zipCode": zip_code
+                }
+                if zip_plus4:
+                    result["zipPlus4"] = zip_plus4
+
+                logger.info(f"USPS address validation successful: ZIP={zip_code}, ZIP+4={zip_plus4}")
+                return result
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                if attempt == USPSConfig.MAX_RETRIES - 1:
+                    raise USPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
+                wait_time = 2 ** attempt
+                await asyncio.sleep(wait_time)
+
+class USPSRateService:
+    def __init__(self):
+        self.client = None
+    async def __aenter__(self):
+        self.client = httpx.AsyncClient(
+            timeout=USPSConfig.REQUEST_TIMEOUT,
+            limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
+        )
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self.client:
+            await self.client.aclose()
+
+    def _is_domestic(self, sender_country: str, destination_country: str) -> bool:
+        """Check if shipment is domestic (both origin and destination must be US)"""
+        return sender_country.upper() == "US" and destination_country.upper() == "US"
+
+    def _build_rate_payload(self, request: UPSRateRequest) -> Dict[str, Any]:
+        """Build USPS API request payload from UPSRateRequest format"""
+        is_domestic = self._is_domestic(request.sender_country, request.country)
+
+        if not request.sender_zip:
+            raise ValueError("sender_zip is required for USPS rate calculation")
+        if not request.zip and is_domestic:
+            raise ValueError("zip is required for USPS domestic rate calculation")
+
+        payload = {
+            "originZIPCode": request.sender_zip,
+            "weight": request.weight,
+            "length": max(1, float(request.length)) if request.length > 0 else 1.0,
+            "width": max(1, float(request.width)) if request.width > 0 else 1.0,
+            "height": max(1, float(request.height)) if request.height > 0 else 1.0,
+            "priceType": "COMMERCIAL"
+        }
+
+        if is_domestic:
+            payload["destinationZIPCode"] = request.zip
+        else:
+            payload["destinationCountryCode"] = request.country
+            if request.zip:
+                payload["foreignPostalCode"] = request.zip
+
+        return payload
+
+    async def get_rates(self, request: UPSRateRequest, request_id: str = None) -> List[RateQuote]:
+        """Get shipping rates from USPS API"""
+        start_time = time.time()
+
+        if request_id is None:
+            request_id = f"usps_rate_{int(time.time() * 1000)}"
+
+        local_request_id = request_id
+
+        try:
+            is_domestic = self._is_domestic(request.sender_country, request.country)
+
+            scope = "domestic-prices" if is_domestic else "international-prices"
+            token = await usps_token_manager.get_token(scope=scope)
+
+            payload = self._build_rate_payload(request)
+
+            if is_domestic:
+                api_url = USPSConfig.DOMESTIC_RATES_URL
+            else:
+                api_url = USPSConfig.INTERNATIONAL_RATES_URL
+
+            response = await self._make_usps_request(token, payload, api_url, local_request_id)
+
+            quotes = self._parse_rate_response(response, is_domestic)
+
+            processing_time = (time.time() - start_time) * 1000
+            logger.info(f"USPS Rate request {local_request_id} completed in {processing_time:.2f}ms, {len(quotes)} quotes returned")
+
+            return quotes
+
+        except Exception as e:
+            processing_time = (time.time() - start_time) * 1000
+            logger.error(f"USPS Rate request {local_request_id} failed after {processing_time:.2f}ms: {str(e)}")
+            raise
+
+    async def _make_usps_request(self, token: str, payload: Dict[str, Any], api_url: str, request_id: str) -> Dict[str, Any]:
+        """Make request to USPS API with retries"""
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "USPS-Rating-Microservice/1.0"
+        }
+
+        logger.info(f"Making USPS API request to: {api_url}")
+        logger.info(f"Request summary: {payload.get('originZIPCode', 'N/A')} -> {payload.get('destinationZIPCode', 'N/A')} ({payload.get('destinationCountryCode', 'US')})")
+
+        for attempt in range(USPSConfig.MAX_RETRIES):
+            try:
+                response = await self.client.post(api_url, json=payload, headers=headers)
+
+                if response.status_code == 401:
+                    error_text = response.text
+                    logger.error(f"USPS API authentication failed (401). Response: {error_text}")
+                    logger.error(f"Token used (first 20 chars): {token[:20]}...")
+
+                    scope = "domestic-prices" if "prices" in api_url and "international" not in api_url else "international-prices"
+                    usps_token_manager.invalidate_token(scope=scope)
+
+                    try:
+                        error_data = response.json()
+                        if "error" in error_data:
+                            error_info = error_data["error"]
+                            error_msg = error_info.get("message", "Unknown error")
+                            error_code = error_info.get("code", "")
+                            raise USPSAPIError(f"USPS API authentication error {error_code}: {error_msg}", error_code, response.status_code)
+                    except json.JSONDecodeError:
+                        pass
+
+                    raise USPSAPIError("USPS API authentication failed - token may be invalid or lack required permissions", "AUTH_ERROR", 401)
+                elif response.status_code != 200:
+                    error_text = response.text
+                    logger.error(f"USPS API returned status {response.status_code}: {error_text}")
+
+                    try:
+                        error_data = response.json()
+                        if "error" in error_data:
+                            error_info = error_data["error"]
+                            error_msg = error_info.get("message", "Unknown error")
+                            error_code = error_info.get("code", "")
+                            raise USPSAPIError(f"USPS API error {error_code}: {error_msg}", error_code, response.status_code)
+                    except json.JSONDecodeError:
+                        logger.error(f"Failed to parse USPS error response as JSON: {error_text}")
+
+                    raise USPSAPIError(f"USPS API error: {response.status_code}", "API_ERROR", response.status_code)
+
+                return response.json()
+
+            except (httpx.TimeoutException, httpx.ConnectError) as e:
+                if attempt == USPSConfig.MAX_RETRIES - 1:
+                    raise USPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
+
+                wait_time = 2 ** attempt
+                await asyncio.sleep(wait_time)
+
+    def _parse_rate_response(self, response_data: Dict[str, Any], is_domestic: bool) -> List[RateQuote]:
+        """Parse USPS API response into rate quotes matching UPS format"""
+        quotes = []
+
+        try:
+            logger.info(f"Parsing USPS response for {'domestic' if is_domestic else 'international'}")
+
+            rate_options = response_data.get("rateOptions", [])
+
+            if not rate_options:
+                logger.warning(f"No rateOptions found in USPS response: {response_data}")
+                return quotes
+
+            if not isinstance(rate_options, list):
+                rate_options = [rate_options]
+
+            logger.info(f"Found {len(rate_options)} rate options to process")
+
+            for rate_option in rate_options:
+                try:
+                    rates = rate_option.get("rates", [])
+                    if not isinstance(rates, list):
+                        rates = [rates]
+
+                    for rate in rates:
+                        mail_class = rate.get("mailClass", "")
+                        rate_indicator = rate.get("rateIndicator", "")
+                        product_name = rate.get("productName", mail_class)
+                        total_base_price = rate_option.get("totalBasePrice", 0)
+
+                        service_code = f"{mail_class}|{rate_indicator}" if rate_indicator else mail_class
+
+                        context = "Domestic" if is_domestic else "International"
+
+                        quote = RateQuote(
+                            service_code=service_code,
+                            service_name=product_name,
+                            total_charge=float(total_base_price),
+                            currency_code="USD",
+                            context=context
+                        )
+
+                        quotes.append(quote)
+                        logger.info(f"Added USPS quote: {product_name} ({service_code}) - ${total_base_price}")
+
+                except Exception as e:
+                    logger.warning(f"Failed to parse USPS rate option: {e}")
+                    continue
+
+            logger.info(f"Successfully parsed {len(quotes)} quotes from USPS response")
+            return quotes
+
+        except Exception as e:
+            logger.error(f"Failed to parse USPS response: {e}")
+            raise USPSAPIError("Failed to parse response", "PARSE_ERROR")
+
 # Application setup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -995,6 +1363,17 @@ async def ups_api_exception_handler(request: Request, exc: UPSAPIError):
         status_code=exc.status_code,
         content={
             "error": exc.error_code or "UPS_API_ERROR",
+            "message": exc.message,
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+    )
+
+@app.exception_handler(USPSAPIError)
+async def usps_api_exception_handler(request: Request, exc: USPSAPIError):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "error": exc.error_code or "USPS_API_ERROR",
             "message": exc.message,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
@@ -1085,7 +1464,149 @@ async def get_ups_rates(
             }
         )
 
+# USPS Address Validation Endpoint
+@app.get("/usps/addresses/validate", summary="Validate USPS address and get ZIP code")
+async def validate_usps_address(
+    streetAddress: str,
+    city: str,
+    state: str,
+    _: bool = Depends(verify_api_key)
+) -> Dict[str, str]:
+    """
+    Validate a USPS address and return ZIP code information.
+    Query parameters:
+    - streetAddress: Street address
+    - city: City name
+    - state: Two-character state code
 
+    Returns:
+    - zipCode: 5-digit ZIP code
+    - zipPlus4: 4-digit ZIP+4 code (if available)
+    """
+    request_id = f"usps_address_{int(time.time() * 1000)}"
+    start_time = time.time()
+
+    logger.info(f"USPS Address validation request {request_id}: {streetAddress}, {city}, {state}")
+
+    try:
+        async with USPSAddressService() as address_service:
+            result = await address_service.validate_address(streetAddress, city, state)
+
+        processing_time = (time.time() - start_time) * 1000
+        logger.info(f"USPS Address validation {request_id} completed in {processing_time:.2f}ms")
+
+        return result
+
+    except USPSAPIError as e:
+        processing_time = (time.time() - start_time) * 1000
+        logger.error(f"USPS Address validation {request_id} failed after {processing_time:.2f}ms: {str(e)}")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail={
+                "error": e.error_code or "USPS_API_ERROR",
+                "message": e.message,
+                "request_id": request_id,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
+    except Exception as e:
+        processing_time = (time.time() - start_time) * 1000
+        logger.error(f"USPS Address validation {request_id} unexpected error after {processing_time:.2f}ms: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
+                "request_id": request_id,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
+
+@app.post("/usps/rates", response_model=RateResponse, summary="Get USPS rates (matching UPS format)")
+async def get_usps_rates(
+    request: UPSRateRequest,
+    _: bool = Depends(verify_api_key)
+) -> RateResponse:
+    """
+    Get USPS shipping rates - compatible with UPS microservice request format.
+
+    Supports both domestic and international rates:
+    - Domestic: Uses USPS domestic prices API
+    - International: Uses USPS international prices API
+
+    Returns rates in the same format as UPS microservice:
+    {
+        "quotes": [
+            {
+                "service_code": "PRIORITY_MAIL|SP",
+                "service_name": "Priority Mail",
+                "total_charge": 12.50,
+                "context": "Domestic" or "International"
+            }
+        ]
+    }
+    """
+    request_id = f"usps_rate_{int(time.time() * 1000)}"
+    start_time = time.time()
+
+    logger.info(f"USPS Rate request {request_id}: {request.sender_country} -> {request.country}, {request.weight} lbs")
+
+    try:
+        request.validate_required_fields()
+
+        async with USPSRateService() as usps_service:
+            quotes = await usps_service.get_rates(request, request_id)
+
+        processing_time = (time.time() - start_time) * 1000
+        is_domestic = request.country.upper() == "US" and request.sender_country.upper() == "US"
+        context_str = "Domestic" if is_domestic else "International"
+
+        response = RateResponse(
+            quotes=quotes,
+            request_id=request_id,
+            timestamp=datetime.now(timezone.utc),
+            processing_time_ms=processing_time,
+            context=context_str
+        )
+
+        return response
+
+    except ValueError as e:
+        processing_time = (time.time() - start_time) * 1000
+        logger.error(f"USPS Rate request {request_id} validation failed after {processing_time:.2f}ms: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "error": "VALIDATION_ERROR",
+                "message": str(e),
+                "request_id": request_id,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
+    except USPSAPIError as e:
+        processing_time = (time.time() - start_time) * 1000
+        logger.error(f"USPS Rate request {request_id} USPS API failed after {processing_time:.2f}ms: {str(e)}")
+        raise HTTPException(
+            status_code=e.status_code,
+            detail={
+                "error": e.error_code or "USPS_API_ERROR",
+                "message": e.message,
+                "request_id": request_id,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
+    except Exception as e:
+        processing_time = (time.time() - start_time) * 1000
+        logger.error(f"USPS Rate request {request_id} unexpected error after {processing_time:.2f}ms: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={
+                "error": "INTERNAL_ERROR",
+                "message": "An unexpected error occurred",
+                "request_id": request_id,
+                "timestamp": datetime.now(timezone.utc).isoformat()
+            }
+        )
 
 # Health check and diagnostic endpoints
 @app.get("/health", summary="Service health check")
