@@ -496,7 +496,7 @@ class UPSRateRequest(BaseModel):
     insured_value: float = Field(0, ge=0, description="Insured value")
     currency_code: str = Field("USD", description="Currency code")
     
-
+    residential_address_indicator: bool = Field(True, description="Residential address indicator")
     
     @validator('weight')
     def validate_weight_minimum(cls, v):
@@ -786,6 +786,9 @@ class UPSRatingService:
         if request.state:
             shipto_address["StateProvinceCode"] = request.state
         
+        if request.residential_address_indicator:
+            shipto_address["ResidentialAddressIndicator"] = ""
+
         # Validate and build package with proper weight and dimension handling
         # Ensure weight meets UPS minimum requirements
         validated_weight = max(1.0, request.weight)
