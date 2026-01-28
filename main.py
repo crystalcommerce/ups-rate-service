@@ -363,14 +363,15 @@ class USPSTokenManager:
         self._lock = asyncio.Lock()
 
     async def get_token(self, scope: str = "addresses") -> str:
-        """Get OAuth token for the specified scope. Tokens expire in 8 hours (28800 seconds).
+        """Get OAuth token for the specified scope.
+
+        Tokens expire in 8 hours (28800 seconds).
 
         Valid scopes:
         - "addresses" - for address validation
         - "domestic-prices" - for domestic rate calculation
         - "international-prices" - for international rate calculation
         """
-        """Get OAuth token for the specified scope. Tokens expire in 8 hours (28800 seconds)."""
         async with self._lock:
             current_time = time.time()
             if scope in self._cache:
@@ -1229,7 +1230,6 @@ class USPSRateService:
                 if response.status_code == 401:
                     error_text = response.text
                     logger.error(f"USPS API authentication failed (401). Response: {error_text}")
-                    logger.error(f"Token used (first 20 chars): {token[:20]}...")
 
                     scope = "domestic-prices" if "prices" in api_url and "international" not in api_url else "international-prices"
                     usps_token_manager.invalidate_token(scope=scope)
@@ -1240,9 +1240,16 @@ class USPSRateService:
                             error_info = error_data["error"]
                             error_msg = error_info.get("message", "Unknown error")
                             error_code = error_info.get("code", "")
-                            raise USPSAPIError(f"USPS API authentication error {error_code}: {error_msg}", error_code, response.status_code)
+                            raise USPSAPIError(
+                                f"USPS API authentication error {error_code}: {error_msg}",
+                                error_code,
+                                response.status_code,
+                            )
                     except json.JSONDecodeError:
-                        pass
+                        logger.error(
+                            "Failed to parse USPS authentication error response as JSON: "
+                            f"{error_text}"
+                        )
 
                     raise USPSAPIError("USPS API authentication failed - token may be invalid or lack required permissions", "AUTH_ERROR", 401)
                 elif response.status_code != 200:
