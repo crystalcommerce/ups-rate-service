@@ -499,11 +499,6 @@ class UPSRateRequest(BaseModel):
     
 
     
-    @validator('weight')
-    def validate_weight_minimum(cls, v):
-        # UPS requirement: minimum 1.0 pound
-        return max(1.0, float(v))
-    
     @validator('service')
     def validate_service(cls, v):
         if v not in UPSConstants.SERVICES:
