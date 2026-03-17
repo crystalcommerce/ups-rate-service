@@ -499,11 +499,6 @@ class UPSRateRequest(BaseModel):
     
 
     
-    @validator('weight')
-    def validate_weight_minimum(cls, v):
-        # UPS requirement: minimum 1.0 pound
-        return max(1.0, float(v))
-    
     @validator('service')
     def validate_service(cls, v):
         if v not in UPSConstants.SERVICES:
@@ -588,10 +583,6 @@ class UPSRateRequest(BaseModel):
                 warnings.append("Destination city is recommended for international shipments")
             if not self.sender_city:
                 warnings.append("Sender city is recommended for international shipments")
-        
-        # Weight validation
-        if self.weight and self.weight < 0.1:
-            errors.append("Weight must be at least 0.1 pounds")
         
         # Package dimensions validation
         if any([self.length, self.width, self.height]) and not all([self.length > 0, self.width > 0, self.height > 0]):
@@ -1247,14 +1238,19 @@ class USPSRateService:
             if is_domestic:
                 letter_payload = self._build_letter_payload(request)
                 if letter_payload:
+                    logger.info(f"[LETTER-RATES] [{local_request_id}] Eligible for First-Class Mail - calling letter-rates API")
                     try:
                         letter_response = await self._make_usps_letter_request(token, letter_payload, USPSConfig.LETTER_RATES_URL, local_request_id)
                         letter_quotes = self._parse_letter_rate_response(letter_response)
+                        logger.info(f"[LETTER-RATES] [{local_request_id}] Added {len(letter_quotes)} First-Class Mail quote(s) to results")
                         quotes.extend(letter_quotes)
                     except USPSAPIError as e:
-                        logger.warning(f"USPS First-Class Mail letter rates request {local_request_id} failed: {e}")
+                        logger.warning(f"[LETTER-RATES] [{local_request_id}] First-Class Mail request failed: {e}")
                     except Exception as e:
-                        logger.warning(f"Unexpected error while fetching USPS letter rates for {local_request_id}: {e}")
+                        logger.warning(f"[LETTER-RATES] [{local_request_id}] Unexpected error fetching letter rates: {e}")
+                else:
+                    weight_oz = max(0.0, float(request.weight)) * 16.0
+                    logger.info(f"[LETTER-RATES] [{local_request_id}] Skipped - weight={weight_oz:.2f}oz (must be >0 and <=3.5oz), sender={request.sender_country}, dest={request.country}")
 
             processing_time = (time.time() - start_time) * 1000
             logger.info(f"USPS Rate request {local_request_id} completed in {processing_time:.2f}ms, {len(quotes)} quotes returned")
@@ -1338,12 +1334,20 @@ class USPSRateService:
             "User-Agent": "USPS-Rating-Microservice/1.0"
         }
 
+        logger.info(f"[LETTER-RATES] [{request_id}] Sending request to: {api_url}")
+        logger.info(f"[LETTER-RATES] [{request_id}] Payload: {json.dumps(payload)}")
+
         for attempt in range(USPSConfig.MAX_RETRIES):
             try:
+                logger.info(f"[LETTER-RATES] [{request_id}] Attempt {attempt + 1}/{USPSConfig.MAX_RETRIES}")
                 response = await self.client.post(api_url, json=payload, headers=headers)
+
+                logger.info(f"[LETTER-RATES] [{request_id}] Response status: {response.status_code}")
+                logger.info(f"[LETTER-RATES] [{request_id}] Raw response body: {response.text}")
 
                 if response.status_code == 401:
                     error_text = response.text
+                    logger.error(f"[LETTER-RATES] [{request_id}] Authentication failed (401): {error_text}")
                     usps_token_manager.invalidate_token(scope="domestic-prices")
 
                     try:
@@ -1359,14 +1363,14 @@ class USPSRateService:
                             )
                     except json.JSONDecodeError:
                         logger.error(
-                            "Failed to parse USPS Letter Rates authentication error response as JSON: "
+                            f"[LETTER-RATES] [{request_id}] Failed to parse auth error response as JSON: "
                             f"{error_text}"
                         )
 
                     raise USPSAPIError("USPS Letter Rates API authentication failed", "AUTH_ERROR", 401)
                 elif response.status_code != 200:
                     error_text = response.text
-                    logger.error(f"USPS Letter Rates API returned status {response.status_code}: {error_text}")
+                    logger.error(f"[LETTER-RATES] [{request_id}] API returned status {response.status_code}: {error_text}")
 
                     try:
                         error_data = response.json()
@@ -1376,17 +1380,21 @@ class USPSRateService:
                             error_code = error_info.get("code", "")
                             raise USPSAPIError(f"USPS Letter Rates API error {error_code}: {error_msg}", error_code, response.status_code)
                     except json.JSONDecodeError:
-                        logger.error(f"Failed to parse USPS Letter Rates error response as JSON: {error_text}")
+                        logger.error(f"[LETTER-RATES] [{request_id}] Failed to parse error response as JSON: {error_text}")
 
                     raise USPSAPIError(f"USPS Letter Rates API error: {response.status_code}", "API_ERROR", response.status_code)
 
-                return response.json()
+                response_data = response.json()
+                logger.info(f"[LETTER-RATES] [{request_id}] Success - parsed response: {json.dumps(response_data)}")
+                return response_data
 
             except (httpx.TimeoutException, httpx.ConnectError) as e:
+                logger.error(f"[LETTER-RATES] [{request_id}] Connection error on attempt {attempt + 1}: {e}")
                 if attempt == USPSConfig.MAX_RETRIES - 1:
                     raise USPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
 
                 wait_time = 2 ** attempt
+                logger.info(f"[LETTER-RATES] [{request_id}] Retrying in {wait_time}s...")
                 await asyncio.sleep(wait_time)
 
     def _parse_rate_response(self, response_data: Dict[str, Any], is_domestic: bool) -> List[RateQuote]:
@@ -1450,9 +1458,10 @@ class USPSRateService:
         quotes: List[RateQuote] = []
 
         try:
-
+            logger.info(f"[LETTER-RATES] Parsing letter rate response")
             total_base_price = response_data.get("totalBasePrice", 0)
             rates = response_data.get("rates", [])
+            logger.info(f"[LETTER-RATES] totalBasePrice={total_base_price}, rates count={len(rates) if isinstance(rates, list) else 1}")
 
             if not isinstance(rates, list):
                 rates = [rates]
@@ -1461,13 +1470,16 @@ class USPSRateService:
                 try:
                     product_name = rate.get("description", "First-Class Mail")
                     mail_class = rate.get("mailClass", "FIRST-CLASS_MAIL")
+                    price = float(total_base_price or rate.get("price", 0))
 
                     service_code = mail_class
+
+                    logger.info(f"[LETTER-RATES] Parsed rate: mailClass={mail_class}, description={product_name}, price=${price}")
 
                     quote = RateQuote(
                         service_code=service_code,
                         service_name=product_name,
-                        total_charge=float(total_base_price or rate.get("price", 0)),
+                        total_charge=price,
                         currency_code="USD",
                         context="Domestic",
                     )
@@ -1475,13 +1487,14 @@ class USPSRateService:
                     quotes.append(quote)
 
                 except Exception as e:
-                    logger.warning(f"Failed to parse USPS Letter Rates entry: {e}")
+                    logger.warning(f"[LETTER-RATES] Failed to parse letter rate entry: {e}, raw entry: {rate}")
                     continue
 
+            logger.info(f"[LETTER-RATES] Finished parsing - {len(quotes)} First-Class Mail quote(s) produced")
             return quotes
 
         except Exception as e:
-            logger.error(f"Failed to parse USPS Letter Rates response: {e}")
+            logger.error(f"[LETTER-RATES] Failed to parse letter rates response: {e}")
             raise USPSAPIError("Failed to parse letter rates response", "PARSE_ERROR")
 
 # Application setup
