@@ -584,10 +584,6 @@ class UPSRateRequest(BaseModel):
             if not self.sender_city:
                 warnings.append("Sender city is recommended for international shipments")
         
-        # Weight validation
-        if self.weight and self.weight < 0.1:
-            errors.append("Weight must be at least 0.1 pounds")
-        
         # Package dimensions validation
         if any([self.length, self.width, self.height]) and not all([self.length > 0, self.width > 0, self.height > 0]):
             warnings.append("If providing dimensions, all three (length, width, height) should be greater than 0")
