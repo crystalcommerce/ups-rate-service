@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, validator
 import uvicorn
+from routers import all_routers
 
 # Configure production logging
 logging.basicConfig(
@@ -1510,6 +1511,9 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan
 )
+
+for router in all_routers:
+  app.include_router(router)
 
 # CORS middleware
 app.add_middleware(CORSMiddleware, 
