@@ -4,8 +4,6 @@ import time
 from auth.fedex_oauth import FedexOauth
 from core.config import FEDEX_BASE_URL, FEDEX_ACCOUNT_NUMBER
 
-from dicttoxml import dicttoxml
-
 class FedexService:
   def __init__(self):
     self.auth = FedexOauth()
