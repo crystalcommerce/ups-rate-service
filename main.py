@@ -17,6 +17,7 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, validator
 import uvicorn
 from routers import all_routers
+from core.security import require_api_key
 
 # Configure production logging
 logging.basicConfig(
@@ -1513,7 +1514,10 @@ app = FastAPI(
 )
 
 for router in all_routers:
-  app.include_router(router)
+  app.include_router(
+    router,
+    dependencies=[Depends(require_api_key)]
+  )
 
 # CORS middleware
 app.add_middleware(CORSMiddleware, 
