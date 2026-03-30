@@ -21,6 +21,7 @@ from core.security import require_api_key
 from core.logging import get_logger
 from core.constants.ups import UPSConstants
 from core.config import settings
+from core.exceptions import UPSAPIError, USPSAPIError
 
 logger = logging.getLogger(__name__)
 
@@ -37,20 +38,6 @@ except Exception as e:
     logging.getLogger().setLevel(logging.INFO)
     logger.error(f"Error setting log level: {e}, defaulting to INFO")
 
-# Custom exceptions
-class UPSAPIError(Exception):
-    def __init__(self, message: str, error_code: str = None, status_code: int = 500):
-        self.message = message
-        self.error_code = error_code
-        self.status_code = status_code
-        super().__init__(self.message)
-
-class USPSAPIError(Exception):
-    def __init__(self, message: str, error_code: str = None, status_code: int = 500):
-        self.message = message
-        self.error_code = error_code
-        self.status_code = status_code
-        super().__init__(self.message)
 
 # Token management (same as before)
 class TokenManager:
