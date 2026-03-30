@@ -14,10 +14,9 @@ class Settings:
   # -------------------------
   DEBUG = os.getenv("DEBUG", "false").lower() == "true"
   LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-  API_KEY = require_env("API_KEY")
+  API_KEY = os.getenv("API_KEY")
+  AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
 
-  REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))
-  MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
   # -------------------------
   # UPS (REQUIRED)
@@ -25,6 +24,8 @@ class Settings:
   UPS_CLIENT_ID = require_env("UPS_CLIENT_ID")
   UPS_CLIENT_SECRET = require_env("UPS_CLIENT_SECRET")
   UPS_ENVIRONMENT = os.getenv("UPS_ENVIRONMENT", "sandbox").lower()
+  UPS_REQUEST_TIMEOUT = int(os.getenv("UPS_REQUEST_TIMEOUT", "30"))
+  UPS_MAX_RETRIES = int(os.getenv("MAX_RETRIES", "3"))
 
   UPS_RATE_LIMIT = int(os.getenv("UPS_RATE_LIMIT", "100"))
 
@@ -43,7 +44,6 @@ class Settings:
   FEDEX_ACCOUNT_NUMBER = require_env("FEDEX_ACCOUNT_NUMBER")
 
   FEDEX_BASE_URL = os.getenv("FEDEX_BASE_URL", "https://apis-sandbox.fedex.com")
-  FEDEX_AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
 
   # -------------------------
   # USPS (OPTIONAL)

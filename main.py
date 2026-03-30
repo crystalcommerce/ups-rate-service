@@ -20,12 +20,13 @@ from routers import all_routers
 from core.security import require_api_key
 from core.logging import get_logger
 from core.constants.ups import UPSConstants
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
 # Set logging level with validation
 try:
-    log_level = Config.LOG_LEVEL.strip() if Config.LOG_LEVEL else "INFO"
+    log_level = settings.LOG_LEVEL.strip() if settings.LOG_LEVEL else "INFO"
     if hasattr(logging, log_level):
         logging.getLogger().setLevel(getattr(logging, log_level))
         logger.info(f"Logging level set to: {log_level}")
@@ -76,7 +77,7 @@ class TokenManager:
             return self._cache["access_token"]
     
     async def _request_token(self) -> Dict[str, Any]:
-        credentials = f"{Config.CLIENT_ID}:{Config.CLIENT_SECRET}"
+        credentials = f"{settings.UPS_CLIENT_ID}:{settings.UPS_CLIENT_SECRET}"
         encoded_credentials = base64.b64encode(credentials.encode()).decode()
         
         headers = {
@@ -85,10 +86,10 @@ class TokenManager:
         }
         data = {"grant_type": "client_credentials"}
         
-        logger.info(f"Requesting OAuth token from: {Config.OAUTH_URL}")
+        logger.info(f"Requesting OAuth token from: {settings.UPS_OAUTH_URL}")
         
-        async with httpx.AsyncClient(timeout=Config.REQUEST_TIMEOUT) as client:
-            response = await client.post(Config.OAUTH_URL, data=data, headers=headers)
+        async with httpx.AsyncClient(timeout=settings.UPS_REQUEST_TIMEOUT) as client:
+            response = await client.post(settings.UPS_OAUTH_URL, data=data, headers=headers)
             
             if response.status_code != 200:
                 logger.error(f"OAuth failed with status {response.status_code}: {response.text}")
@@ -146,13 +147,13 @@ class USPSTokenManager:
         }
         data = {
             "grant_type": "client_credentials",
-            "client_id": USPSConfig.CLIENT_ID,
-            "client_secret": USPSConfig.CLIENT_SECRET,
+            "client_id": settings.USPS_CLIENT_ID,
+            "client_secret": settings.USPS_CLIENT_SECRET,
             "scope": scope
         }
-        logger.info(f"Requesting USPS OAuth token from: {USPSConfig.OAUTH_URL} with scope: {scope}")
-        async with httpx.AsyncClient(timeout=USPSConfig.REQUEST_TIMEOUT) as client:
-            response = await client.post(USPSConfig.OAUTH_URL, data=data, headers=headers)
+        logger.info(f"Requesting USPS OAuth token from: {settings.USPS_OAUTH_URL} with scope: {scope}")
+        async with httpx.AsyncClient(timeout=settings.USPS_REQUEST_TIMEOUT) as client:
+            response = await client.post(settings.USPS_OAUTH_URL, data=data, headers=headers)
             if response.status_code != 200:
                 logger.error(f"USPS OAuth failed with status {response.status_code}: {response.text}")
                 raise USPSAPIError(f"USPS OAuth failed: {response.status_code}", "AUTH_ERROR", response.status_code)
@@ -371,7 +372,7 @@ class UPSRatingService:
     
     async def __aenter__(self):
         self.client = httpx.AsyncClient(
-            timeout=Config.REQUEST_TIMEOUT,
+            timeout=settings.UPS_REQUEST_TIMEOUT,
             limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
         )
         return self
@@ -656,9 +657,9 @@ class UPSRatingService:
         # Determine the correct endpoint URL based on request option
         request_option = payload['RateRequest']['Request']['RequestOption']
         if request_option == "Shop":
-            api_url = Config.RATE_URL.replace('/Rate', '/Shop')
+            api_url = settings.UPS_RATE_URL.replace('/Rate', '/Shop')
         else:
-            api_url = Config.RATE_URL
+            api_url = settings.UPS_RATE_URL
         
         logger.info(f"Making UPS API request to: {api_url}")
         logger.info(f"Request summary: {payload['RateRequest']['Shipment']['Shipper']['Address']['CountryCode']} -> {payload['RateRequest']['Shipment']['ShipTo']['Address']['CountryCode']}")
@@ -672,7 +673,7 @@ class UPSRatingService:
         if not shipper_postal or not shipto_postal:
             logger.warning("Empty postal codes detected - this may cause UPS error 111100")
         
-        for attempt in range(Config.MAX_RETRIES):
+        for attempt in range(settings.UPS_MAX_RETRIES):
             try:
                 response = await self.client.post(api_url, json=payload, headers=headers)
                 
@@ -718,7 +719,7 @@ class UPSRatingService:
                 return response.json()
                 
             except (httpx.TimeoutException, httpx.ConnectError) as e:
-                if attempt == Config.MAX_RETRIES - 1:
+                if attempt == settings.UPS_MAX_RETRIES - 1:
                     raise UPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
                 
                 wait_time = 2 ** attempt
@@ -808,7 +809,7 @@ class USPSAddressService:
 
     async def __aenter__(self):
         self.client = httpx.AsyncClient(
-            timeout=USPSConfig.REQUEST_TIMEOUT,
+            timeout=settings.USPS_REQUEST_TIMEOUT,
             limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
         )
         return self
@@ -828,10 +829,10 @@ class USPSAddressService:
             "Content-Type": "application/json"
         }
         logger.info(f"Validating USPS address: {street_address}, {city}, {state}")
-        for attempt in range(USPSConfig.MAX_RETRIES):
+        for attempt in range(settings.USPS_MAX_RETRIES):
             try:
                 response = await self.client.get(
-                    USPSConfig.ADDRESS_VALIDATION_URL,
+                    settings.USPS_ADDRESS_VALIDATION_URL,
                     params=params,
                     headers=headers
                 )
@@ -868,7 +869,7 @@ class USPSAddressService:
                 logger.info(f"USPS address validation successful: ZIP={zip_code}, ZIP+4={zip_plus4}")
                 return result
             except (httpx.TimeoutException, httpx.ConnectError) as e:
-                if attempt == USPSConfig.MAX_RETRIES - 1:
+                if attempt == settings.USPS_MAX_RETRIES - 1:
                     raise USPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
                 wait_time = 2 ** attempt
                 await asyncio.sleep(wait_time)
@@ -878,7 +879,7 @@ class USPSRateService:
         self.client = None
     async def __aenter__(self):
         self.client = httpx.AsyncClient(
-            timeout=USPSConfig.REQUEST_TIMEOUT,
+            timeout=settings.USPS_REQUEST_TIMEOUT,
             limits=httpx.Limits(max_connections=100, max_keepalive_connections=20)
         )
         return self
@@ -977,9 +978,9 @@ class USPSRateService:
             payload = self._build_rate_payload(request)
 
             if is_domestic:
-                api_url = USPSConfig.DOMESTIC_RATES_URL
+                api_url = settings.USPS_DOMESTIC_RATES_URL
             else:
-                api_url = USPSConfig.INTERNATIONAL_RATES_URL
+                api_url = settings.USPS_INTERNATIONAL_RATES_URL
 
             response = await self._make_usps_request(token, payload, api_url, local_request_id)
 
@@ -990,7 +991,7 @@ class USPSRateService:
                 if letter_payload:
                     logger.info(f"[LETTER-RATES] [{local_request_id}] Eligible for First-Class Mail - calling letter-rates API")
                     try:
-                        letter_response = await self._make_usps_letter_request(token, letter_payload, USPSConfig.LETTER_RATES_URL, local_request_id)
+                        letter_response = await self._make_usps_letter_request(token, letter_payload, settings.USPS_LETTER_RATES_URL, local_request_id)
                         letter_quotes = self._parse_letter_rate_response(letter_response)
                         logger.info(f"[LETTER-RATES] [{local_request_id}] Added {len(letter_quotes)} First-Class Mail quote(s) to results")
                         quotes.extend(letter_quotes)
@@ -1023,7 +1024,7 @@ class USPSRateService:
         logger.info(f"Making USPS API request to: {api_url}")
         logger.info(f"Request summary: {payload.get('originZIPCode', 'N/A')} -> {payload.get('destinationZIPCode', 'N/A')} ({payload.get('destinationCountryCode', 'US')})")
 
-        for attempt in range(USPSConfig.MAX_RETRIES):
+        for attempt in range(settings.USPS_MAX_RETRIES):
             try:
                 response = await self.client.post(api_url, json=payload, headers=headers)
 
@@ -1071,7 +1072,7 @@ class USPSRateService:
                 return response.json()
 
             except (httpx.TimeoutException, httpx.ConnectError) as e:
-                if attempt == USPSConfig.MAX_RETRIES - 1:
+                if attempt == settings.USPS_MAX_RETRIES - 1:
                     raise USPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
 
                 wait_time = 2 ** attempt
@@ -1087,9 +1088,9 @@ class USPSRateService:
         logger.info(f"[LETTER-RATES] [{request_id}] Sending request to: {api_url}")
         logger.info(f"[LETTER-RATES] [{request_id}] Payload: {json.dumps(payload)}")
 
-        for attempt in range(USPSConfig.MAX_RETRIES):
+        for attempt in range(settings.USPS_MAX_RETRIES):
             try:
-                logger.info(f"[LETTER-RATES] [{request_id}] Attempt {attempt + 1}/{USPSConfig.MAX_RETRIES}")
+                logger.info(f"[LETTER-RATES] [{request_id}] Attempt {attempt + 1}/{settings.USPS_MAX_RETRIES}")
                 response = await self.client.post(api_url, json=payload, headers=headers)
 
                 logger.info(f"[LETTER-RATES] [{request_id}] Response status: {response.status_code}")
@@ -1140,7 +1141,7 @@ class USPSRateService:
 
             except (httpx.TimeoutException, httpx.ConnectError) as e:
                 logger.error(f"[LETTER-RATES] [{request_id}] Connection error on attempt {attempt + 1}: {e}")
-                if attempt == USPSConfig.MAX_RETRIES - 1:
+                if attempt == settings.USPS_MAX_RETRIES - 1:
                     raise USPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
 
                 wait_time = 2 ** attempt
@@ -1277,9 +1278,9 @@ app.add_middleware(CORSMiddleware,
 security = HTTPBearer(auto_error=False)
 
 async def verify_api_key(credentials: HTTPAuthorizationCredentials = Depends(security)):
-    if not Config.API_KEY:
+    if not settings.API_KEY:
         return True
-    if not credentials or credentials.credentials != Config.API_KEY:
+    if not credentials or credentials.credentials != settings.API_KEY:
         raise HTTPException(status_code=401, detail="Invalid API key")
     return True
 
@@ -1550,7 +1551,7 @@ async def health_check():
         async with httpx.AsyncClient(timeout=5.0) as client:
             # Just test if we can reach the UPS API endpoint
             try:
-                response = await client.head(Config.RATE_URL.replace('/rating/v1/Rate', '/'), timeout=5.0)
+                response = await client.head(settings.RATE_URL.replace('/rating/v1/Rate', '/'), timeout=5.0)
                 connectivity_status = "ok" if response.status_code in [200, 404, 405] else "degraded"
             except:
                 connectivity_status = "failed"
@@ -1571,10 +1572,10 @@ async def health_check():
                 }
             },
             "configuration": {
-                "oauth_url": Config.OAUTH_URL,
-                "rate_url": Config.RATE_URL,
-                "timeout_seconds": Config.REQUEST_TIMEOUT,
-                "max_retries": Config.MAX_RETRIES
+                "oauth_url": settings.UPS_OAUTH_URL,
+                "rate_url": settings.UPS_RATE_URL,
+                "timeout_seconds": settings.UPS_REQUEST_TIMEOUT,
+                "max_retries": settings.UPS_MAX_RETRIES
             }
         }
     except Exception as e:
@@ -1672,7 +1673,7 @@ async def get_metrics(_: bool = Depends(verify_api_key)) -> Dict[str, Any]:
         "service": {
             "name": "UPS Rating Microservice",
             "version": "1.0.0",
-            "environment": Config.UPS_ENVIRONMENT,
+            "environment": settings.UPS_ENVIRONMENT,
             "ruby_compatible": True,
             "supported_endpoints": [
                 "/rates",
@@ -1686,8 +1687,8 @@ async def get_metrics(_: bool = Depends(verify_api_key)) -> Dict[str, Any]:
             ]
         },
         "configuration": {
-            "request_timeout": Config.REQUEST_TIMEOUT,
-            "max_retries": Config.MAX_RETRIES,
+            "request_timeout": settings.UPS_REQUEST_TIMEOUT,
+            "max_retries": settings.UPS_MAX_RETRIES,
             "api_version": UPSConstants.API_VERSION
         },
         "ruby_features": {
