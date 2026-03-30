@@ -18,15 +18,8 @@ from pydantic import BaseModel, Field, validator
 import uvicorn
 from routers import all_routers
 from core.security import require_api_key
+from core.logging import get_logger
 
-# Configure production logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-    ]
-)
 logger = logging.getLogger(__name__)
 
 # Configuration
