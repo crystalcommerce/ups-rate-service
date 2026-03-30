@@ -2,14 +2,14 @@ import requests
 import time
 
 from auth.fedex_oauth import FedexOauth
-from core.config import FEDEX_BASE_URL, FEDEX_ACCOUNT_NUMBER
+from core.config import settings
 
 class FedexService:
   def __init__(self):
     self.auth = FedexOauth()
 
   def get_rates(self, payload: dict):
-    url = f"{FEDEX_BASE_URL}/rate/v1/rates/quotes"
+    url = f"{settings.FEDEX_BASE_URL}/rate/v1/rates/quotes"
 
     weight = payload['requestedShipment']["requestedPackageLineItems"][0]["weight"]
     weight["value"] = max(weight["value"], 1)
@@ -17,7 +17,7 @@ class FedexService:
     payload = {
       **payload,
       "accountNumber": {
-        "value": FEDEX_ACCOUNT_NUMBER
+        "value": settings.FEDEX_ACCOUNT_NUMBER
       }
     }
 

@@ -22,69 +22,6 @@ from core.logging import get_logger
 
 logger = logging.getLogger(__name__)
 
-# Configuration
-class Config:
-    CLIENT_ID = os.getenv("UPS_CLIENT_ID", "")
-    CLIENT_SECRET = os.getenv("UPS_CLIENT_SECRET", "")
-    UPS_ENVIRONMENT = os.getenv("UPS_ENVIRONMENT", "sandbox").lower()
-    
-
-    
-    # API Configuration
-    REQUEST_TIMEOUT = int(os.getenv("UPS_REQUEST_TIMEOUT", "30"))
-    MAX_RETRIES = int(os.getenv("UPS_MAX_RETRIES", "3"))
-    RATE_LIMIT_REQUESTS = int(os.getenv("UPS_RATE_LIMIT", "100"))
-    
-    # Production settings
-    DEBUG = os.getenv("DEBUG", "false").lower() == "true"
-    LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-    API_KEY = os.getenv("API_KEY", "")
-    
-    # Set URLs based on environment
-    if UPS_ENVIRONMENT == "production":
-        OAUTH_URL = "https://onlinetools.ups.com/security/v1/oauth/token"
-        RATE_URL = "https://onlinetools.ups.com/api/rating/v1/Rate"
-
-    else:
-        OAUTH_URL = "https://wwwcie.ups.com/security/v1/oauth/token"
-        RATE_URL = "https://wwwcie.ups.com/api/rating/v1/Rate" 
-
-    
-    @classmethod
-    def validate(cls):
-        """Validate required configuration"""
-        if not cls.CLIENT_ID or not cls.CLIENT_SECRET:
-            raise ValueError("UPS_CLIENT_ID and UPS_CLIENT_SECRET environment variables are required")
-        
-        client_id_status = '***' if cls.CLIENT_ID else 'MISSING'
-        client_secret_status = '***' if cls.CLIENT_SECRET else 'MISSING'
-        logger.info(f"UPS Configuration: Environment={cls.UPS_ENVIRONMENT}, CLIENT_ID={client_id_status}, CLIENT_SECRET={client_secret_status}")
-        logger.info(f"UPS URLs: OAuth={cls.OAUTH_URL}, Rate={cls.RATE_URL}")
-
-class USPSConfig:
-    CLIENT_ID = os.getenv("USPS_CLIENT_ID", "")
-    CLIENT_SECRET = os.getenv("USPS_CLIENT_SECRET", "")
-
-    REQUEST_TIMEOUT = int(os.getenv("USPS_REQUEST_TIMEOUT", "30"))
-    MAX_RETRIES = int(os.getenv("USPS_MAX_RETRIES", "3"))
-
-    OAUTH_URL = os.getenv("USPS_OAUTH_URL", "https://apis.usps.com/oauth2/v3/token")
-    ADDRESS_VALIDATION_URL = os.getenv("USPS_ADDRESS_VALIDATION_URL", "https://apis.usps.com/addresses/v3/zipcode")
-    DOMESTIC_RATES_URL = os.getenv("USPS_DOMESTIC_RATES_URL", "https://apis.usps.com/prices/v3/total-rates/search")
-    LETTER_RATES_URL = os.getenv("USPS_LETTER_RATES_URL", "https://apis.usps.com/prices/v3/letter-rates/search")
-    INTERNATIONAL_RATES_URL = os.getenv("USPS_INTERNATIONAL_RATES_URL", "https://apis.usps.com/international-prices/v3/total-rates/search")
-
-    @classmethod
-    def validate(cls):
-        """Validate required configuration"""
-        if not cls.CLIENT_ID or not cls.CLIENT_SECRET:
-            logger.warning("USPS_CLIENT_ID and USPS_CLIENT_SECRET environment variables not set - USPS endpoints will not work")
-        else:
-            client_id_status = '***' if cls.CLIENT_ID else 'MISSING'
-            client_secret_status = '***' if cls.CLIENT_SECRET else 'MISSING'
-            logger.info(f"USPS Configuration: CLIENT_ID={client_id_status}, CLIENT_SECRET={client_secret_status}")
-            logger.info(f"USPS URLs: OAuth={cls.OAUTH_URL}, Address={cls.ADDRESS_VALIDATION_URL}, Domestic Rates={cls.DOMESTIC_RATES_URL}, International Rates={cls.INTERNATIONAL_RATES_URL}")
-
 # UPS Constants
 class UPSConstants:
     API_VERSION = "1.0001"
