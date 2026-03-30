@@ -78,6 +78,7 @@ class USPSConfig:
     DOMESTIC_RATES_URL = os.getenv("USPS_DOMESTIC_RATES_URL", "https://apis.usps.com/prices/v3/total-rates/search")
     LETTER_RATES_URL = os.getenv("USPS_LETTER_RATES_URL", "https://apis.usps.com/prices/v3/letter-rates/search")
     INTERNATIONAL_RATES_URL = os.getenv("USPS_INTERNATIONAL_RATES_URL", "https://apis.usps.com/international-prices/v3/total-rates/search")
+    INTL_LETTER_RATES_URL = os.getenv("USPS_INTL_LETTER_RATES_URL", "https://apis.usps.com/international-prices/v3/letter-rates/search")
 
     @classmethod
     def validate(cls):
@@ -1182,6 +1183,39 @@ class USPSRateService:
 
         return payload
 
+    def _build_intl_letter_payload(self, request: UPSRateRequest) -> Optional[Dict[str, Any]]:
+        """
+        Build USPS InternationalLetterRatesQuery payload for First-Class Mail International letters.
+        Weight must be > 0 and <= 3.5 oz.
+        """
+        weight_oz = max(0.0, float(request.weight)) * 16.0
+        if weight_oz <= 0 or weight_oz > 3.5:
+            return None
+
+        length = float(request.length or 0)
+        height = float(request.height or 0)
+        width = float(request.width or 0)
+
+        if length > 0 and height > 0 and width > 0:
+            dims = sorted([length, height, width])
+            thickness, height, length = dims[0], dims[1], dims[2]
+        else:
+            length = 6.0
+            height = 4.0
+            thickness = 0.02
+
+        payload = {
+            "weight": weight_oz,
+            "length": length,
+            "height": height,
+            "thickness": thickness,
+            "processingCategory": "LETTERS",
+            "destinationCountryCode": request.country,
+        }
+        logger.info(f"[INTL-LETTER-RATES] InternationalLetterRatesQuery payload: {payload}")
+
+        return payload
+
     def _build_rate_payload(self, request: UPSRateRequest) -> Dict[str, Any]:
         """Build USPS API request payload from UPSRateRequest format"""
         is_domestic = self._is_domestic(request.sender_country, request.country)
@@ -1241,7 +1275,7 @@ class USPSRateService:
                     logger.info(f"[LETTER-RATES] [{local_request_id}] Eligible for First-Class Mail - calling letter-rates API")
                     try:
                         letter_response = await self._make_usps_letter_request(token, letter_payload, USPSConfig.LETTER_RATES_URL, local_request_id)
-                        letter_quotes = self._parse_letter_rate_response(letter_response)
+                        letter_quotes = self._parse_letter_rate_response(letter_response, is_domestic=True)
                         logger.info(f"[LETTER-RATES] [{local_request_id}] Added {len(letter_quotes)} First-Class Mail quote(s) to results")
                         quotes.extend(letter_quotes)
                     except USPSAPIError as e:
@@ -1251,6 +1285,22 @@ class USPSRateService:
                 else:
                     weight_oz = max(0.0, float(request.weight)) * 16.0
                     logger.info(f"[LETTER-RATES] [{local_request_id}] Skipped - weight={weight_oz:.2f}oz (must be >0 and <=3.5oz), sender={request.sender_country}, dest={request.country}")
+            else:
+                intl_letter_payload = self._build_intl_letter_payload(request)
+                if intl_letter_payload:
+                    logger.info(f"[INTL-LETTER-RATES] [{local_request_id}] Eligible for First-Class Mail International - calling intl letter-rates API")
+                    try:
+                        intl_letter_response = await self._make_usps_letter_request(token, intl_letter_payload, USPSConfig.INTL_LETTER_RATES_URL, local_request_id)
+                        intl_letter_quotes = self._parse_letter_rate_response(intl_letter_response, is_domestic=False)
+                        logger.info(f"[INTL-LETTER-RATES] [{local_request_id}] Added {len(intl_letter_quotes)} First-Class Mail International letter quote(s) to results")
+                        quotes.extend(intl_letter_quotes)
+                    except USPSAPIError as e:
+                        logger.warning(f"[INTL-LETTER-RATES] [{local_request_id}] First-Class Mail International letter request failed: {e}")
+                    except Exception as e:
+                        logger.warning(f"[INTL-LETTER-RATES] [{local_request_id}] Unexpected error fetching intl letter rates: {e}")
+                else:
+                    weight_oz = max(0.0, float(request.weight)) * 16.0
+                    logger.info(f"[INTL-LETTER-RATES] [{local_request_id}] Skipped - weight={weight_oz:.2f}oz (must be >0 and <=3.5oz), dest={request.country}")
 
             processing_time = (time.time() - start_time) * 1000
             logger.info(f"USPS Rate request {local_request_id} completed in {processing_time:.2f}ms, {len(quotes)} quotes returned")
@@ -1453,7 +1503,7 @@ class USPSRateService:
             logger.error(f"Failed to parse USPS response: {e}")
             raise USPSAPIError("Failed to parse response", "PARSE_ERROR")
 
-    def _parse_letter_rate_response(self, response_data: Dict[str, Any]) -> List[RateQuote]:
+    def _parse_letter_rate_response(self, response_data: Dict[str, Any], is_domestic: bool = True) -> List[RateQuote]:
         """Parse USPS Letter Rates API response into RateQuote list for First-Class Mail."""
         quotes: List[RateQuote] = []
 
@@ -1481,7 +1531,7 @@ class USPSRateService:
                         service_name=product_name,
                         total_charge=price,
                         currency_code="USD",
-                        context="Domestic",
+                        context="Domestic" if is_domestic else "International",
                     )
 
                     quotes.append(quote)
