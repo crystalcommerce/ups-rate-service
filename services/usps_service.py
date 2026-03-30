@@ -8,11 +8,13 @@ from typing import List, Optional, Dict, Any
 from core.config import settings
 from core.logging import get_logger
 
-from models.ups import UPSRateRequest, RateQuote
-from exceptions.usps_exceptions import USPSAPIError
-from clients.usps_client import usps_token_manager
+from schemas.ups import UPSRateRequest, RateQuote
+from core.exceptions.usps import USPSAPIError
+from auth.usps_oauth import USPSOauth
 
 logger = get_logger(__name__)
+
+usps_oauth = USPSOauth()
 
 
 class USPSAddressService:
@@ -31,7 +33,7 @@ class USPSAddressService:
       await self.client.aclose()
 
   async def validate_address(self, street_address: str, city: str, state: str) -> Dict[str, str]:
-    token = await usps_token_manager.get_token(scope="addresses")
+    token = usps_oauth.get_token(scope="addresses")
 
     params = {
       "streetAddress": street_address,
@@ -57,7 +59,7 @@ class USPSAddressService:
         if response.status_code == 401:
           error_text = response.text
           logger.error(f"USPS Address API authentication failed (401). Response: {error_text}")
-          usps_token_manager.invalidate_token(scope="addresses")
+          usps_oauth.invalidate_token(scope="addresses")
           raise USPSAPIError("Authentication failed", "AUTH_ERROR", 401)
 
         elif response.status_code != 200:
@@ -185,7 +187,7 @@ class USPSRateService:
       is_domestic = self._is_domestic(request.sender_country, request.country)
 
       scope = "domestic-prices" if is_domestic else "international-prices"
-      token = await usps_token_manager.get_token(scope=scope)
+      token = usps_oauth.get_token(scope=scope)
 
       payload = self._build_rate_payload(request)
 
@@ -214,3 +216,124 @@ class USPSRateService:
     except Exception as e:
       logger.error(f"USPS Rate request {local_request_id} failed: {e}")
       raise
+
+  async def _make_usps_request(self, token: str, payload: Dict[str, Any], api_url: str, request_id: str) -> Dict[str, Any]:
+    headers = {
+      "Content-Type": "application/json",
+      "Authorization": f"Bearer {token}",
+      "User-Agent": "USPS-Rating-Microservice/1.0"
+    }
+
+    logger.info(f"Making USPS API request to: {api_url}")
+
+    for attempt in range(settings.USPS_MAX_RETRIES):
+      try:
+        response = await self.client.post(api_url, json=payload, headers=headers)
+
+        if response.status_code == 401:
+          usps_oauth.invalidate_token()
+          raise USPSAPIError("Authentication failed", "AUTH_ERROR", 401)
+
+        elif response.status_code != 200:
+          error_text = response.text
+          logger.error(f"USPS API returned status {response.status_code}: {error_text}")
+
+          try:
+            error_data = response.json()
+            if "error" in error_data:
+              error_info = error_data["error"]
+              raise USPSAPIError(
+                error_info.get("message", "Unknown error"),
+                error_info.get("code", ""),
+                response.status_code
+              )
+          except json.JSONDecodeError:
+            pass
+
+          raise USPSAPIError("USPS API error", "API_ERROR", response.status_code)
+
+        return response.json()
+
+      except (httpx.TimeoutException, httpx.ConnectError):
+        if attempt == settings.USPS_MAX_RETRIES - 1:
+          raise USPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
+
+        await asyncio.sleep(2 ** attempt)
+
+  async def _make_usps_letter_request(self, token: str, payload: Dict[str, Any], api_url: str, request_id: str) -> Dict[str, Any]:
+    headers = {
+      "Content-Type": "application/json",
+      "Authorization": f"Bearer {token}"
+    }
+
+    for attempt in range(settings.USPS_MAX_RETRIES):
+      try:
+        response = await self.client.post(api_url, json=payload, headers=headers)
+
+        if response.status_code == 401:
+          usps_oauth.invalidate_token(scope="domestic-prices")
+          raise USPSAPIError("Authentication failed", "AUTH_ERROR", 401)
+
+        elif response.status_code != 200:
+          raise USPSAPIError("USPS Letter API error", "API_ERROR", response.status_code)
+
+        return response.json()
+
+      except (httpx.TimeoutException, httpx.ConnectError):
+        if attempt == settings.USPS_MAX_RETRIES - 1:
+          raise USPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
+
+        await asyncio.sleep(2 ** attempt)
+
+  def _parse_rate_response(self, response_data: Dict[str, Any], is_domestic: bool) -> List[RateQuote]:
+    quotes = []
+
+    rate_options = response_data.get("rateOptions", [])
+
+    if not isinstance(rate_options, list):
+      rate_options = [rate_options]
+
+    for option in rate_options:
+      rates = option.get("rates", [])
+
+      if not isinstance(rates, list):
+        rates = [rates]
+
+      for rate in rates:
+        service_code = rate.get("mailClass", "")
+        service_name = rate.get("productName", service_code)
+        total = float(option.get("totalBasePrice", 0))
+
+        quotes.append(
+          RateQuote(
+            service_code=service_code,
+            service_name=service_name,
+            total_charge=total,
+            currency_code="USD",
+            context="Domestic" if is_domestic else "International"
+          )
+        )
+
+    return quotes
+
+  def _parse_letter_rate_response(self, response_data: Dict[str, Any]) -> List[RateQuote]:
+    quotes = []
+
+    total = float(response_data.get("totalBasePrice", 0))
+    rates = response_data.get("rates", [])
+
+    if not isinstance(rates, list):
+      rates = [rates]
+
+    for rate in rates:
+      quotes.append(
+        RateQuote(
+          service_code=rate.get("mailClass", "FIRST_CLASS"),
+          service_name=rate.get("description", "First-Class Mail"),
+          total_charge=total,
+          currency_code="USD",
+          context="Domestic"
+        )
+      )
+
+    return quotes

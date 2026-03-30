@@ -315,3 +315,79 @@ class UPSRatingService:
           raise UPSAPIError("Connection timeout", "TIMEOUT_ERROR", 503)
         
         await asyncio.sleep(2 ** attempt)
+
+  def _parse_rate_response(
+    self,
+    response_data: Dict[str, Any],
+    origin_country: str,
+    dest_country: str,
+    context: str,
+    requested_service: str = "all"
+  ) -> List[RateQuote]:
+
+    quotes = []
+
+    try:
+      rate_response = response_data.get("RateResponse", {})
+      rated_shipments = rate_response.get("RatedShipment", [])
+
+      if not rated_shipments:
+        logger.warning(f"No RatedShipment found in response: {response_data}")
+        return quotes
+
+      if not isinstance(rated_shipments, list):
+        rated_shipments = [rated_shipments]
+
+      requested_service_code = None
+      if requested_service != "all":
+        requested_service_code = UPSConstants.SERVICES.get(requested_service)
+
+      for shipment in rated_shipments:
+        try:
+          service = shipment.get("Service", {})
+          service_code = service.get("Code", "")
+
+          if requested_service_code and service_code != requested_service_code:
+            continue
+
+          service_name = UPSConstants.get_service_name_from_code(
+            origin_country,
+            dest_country,
+            service_code
+          )
+
+          total_charges = shipment.get("TotalCharges", {})
+          total_charge = float(total_charges.get("MonetaryValue", 0))
+          currency_code = total_charges.get("CurrencyCode", "USD")
+
+          delivery_days = None
+          guaranteed = None
+
+          if "GuaranteedDelivery" in shipment:
+            guaranteed_info = shipment["GuaranteedDelivery"]
+            if guaranteed_info.get("BusinessDaysInTransit"):
+              delivery_days = int(guaranteed_info["BusinessDaysInTransit"])
+              guaranteed = True
+
+          quote = RateQuote(
+            service_code=service_code,
+            service_name=service_name,
+            total_charge=total_charge,
+            currency_code=currency_code,
+            delivery_days=delivery_days,
+            guaranteed=guaranteed,
+            context=context,
+            method_id=self._get_service_id(service_code, context)
+          )
+
+          quotes.append(quote)
+
+        except Exception as e:
+          logger.warning(f"Failed to parse shipment: {e}")
+          continue
+
+      return quotes
+
+    except Exception as e:
+      logger.error(f"Failed to parse UPS response: {e}")
+      raise UPSAPIError("Failed to parse response", "PARSE_ERROR")
