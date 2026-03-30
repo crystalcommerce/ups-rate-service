@@ -13,8 +13,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import     length: float = Field(0, ge=0, description="Package length")
-HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from pydantic import BaseModel, Field, validator
 import uvicorn
 from routers import all_routers
@@ -38,6 +37,7 @@ try:
 except Exception as e:
     logging.getLogger().setLevel(logging.INFO)
     logger.error(f"Error setting log level: {e}, defaulting to INFO")
+
 
 # Application setup
 @asynccontextmanager
