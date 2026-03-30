@@ -192,19 +192,6 @@ class UPSConstants:
         context = cls.get_context(origin_country, destination_country)
         return cls.SERVICE_CODES.get(context, {}).get(service_code, "Unknown Service")
 
-# Initialize configuration
-try:
-    Config.validate()
-    logger.info(f"Configuration loaded - Environment: {Config.UPS_ENVIRONMENT}")
-except ValueError as e:
-    logger.error(f"Configuration error: {e}")
-    raise
-
-try:
-    USPSConfig.validate()
-except Exception as e:
-    logger.warning(f"USPS configuration warning: {e}")
-
 # Set logging level with validation
 try:
     log_level = Config.LOG_LEVEL.strip() if Config.LOG_LEVEL else "INFO"
