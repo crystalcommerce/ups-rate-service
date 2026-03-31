@@ -1,12 +1,13 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from core.config import AUTH_TOKEN
+from core.config import settings
 
 security = HTTPBearer(auto_error=False)
 
 async def require_api_key(
   credentials: HTTPAuthorizationCredentials = Depends(security)
 ):
+  AUTH_TOKEN = settings.AUTH_TOKEN
   if not AUTH_TOKEN:
     return True
 
