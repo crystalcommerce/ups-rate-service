@@ -2,7 +2,7 @@ import time
 from datetime import datetime, timezone
 from typing import Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, HTTPException, status
 
 from schemas.ups import UPSRateRequest, RateResponse
 from services.usps_service import USPSAddressService, USPSRateService

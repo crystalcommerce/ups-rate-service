@@ -68,9 +68,6 @@ app.add_middleware(CORSMiddleware,
                   allow_methods=["GET", "POST"], 
                   allow_headers=["*"])
 
-# Security
-security = HTTPBearer(auto_error=False)
-
 # Exception handlers
 @app.exception_handler(UPSAPIError)
 async def ups_api_exception_handler(request: Request, exc: UPSAPIError):
