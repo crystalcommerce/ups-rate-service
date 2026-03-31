@@ -18,26 +18,12 @@ from pydantic import BaseModel, Field, validator
 import uvicorn
 from routers import public_routers, secured_routers
 from core.security import require_api_key
-from core.logging import get_logger
+from core.logging import setup_logging, get_logger
 from core.constants.ups import UPSConstants
 from core.config import settings
 from core.exceptions import UPSAPIError, USPSAPIError
-
+setup_logging()  
 logger = logging.getLogger(__name__)
-
-# Set logging level with validation
-try:
-    log_level = settings.LOG_LEVEL.strip() if settings.LOG_LEVEL else "INFO"
-    if hasattr(logging, log_level):
-        logging.getLogger().setLevel(getattr(logging, log_level))
-        logger.info(f"Logging level set to: {log_level}")
-    else:
-        logging.getLogger().setLevel(logging.INFO)
-        logger.warning(f"Invalid log level '{log_level}', defaulting to INFO")
-except Exception as e:
-    logging.getLogger().setLevel(logging.INFO)
-    logger.error(f"Error setting log level: {e}, defaulting to INFO")
-
 
 # Application setup
 @asynccontextmanager
@@ -89,17 +75,4 @@ async def usps_api_exception_handler(request: Request, exc: USPSAPIError):
             "message": exc.message,
             "timestamp": datetime.now(timezone.utc).isoformat()
         }
-    )
-
-
-
-
-
-
-
-if __name__ == "__main__":
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=int(os.getenv("PORT", "8000"))
     )
