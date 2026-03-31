@@ -153,7 +153,7 @@ async def validate_request(
     }
 
   except ValueError as e:
-    return HTTPException(
+    raise HTTPException(
       status_code=400,
       detail={
         "status": "invalid",
@@ -163,7 +163,7 @@ async def validate_request(
     )
 
   except Exception as e:
-    return HTTPException(
+    raise HTTPException(
       status_code=500,
       detail={
         "status": "error",
