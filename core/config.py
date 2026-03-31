@@ -14,7 +14,6 @@ class Settings:
   # -------------------------
   DEBUG = os.getenv("DEBUG", "false").lower() == "true"
   LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
-  API_KEY = os.getenv("API_KEY")
   AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
 
 
