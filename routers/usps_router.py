@@ -4,7 +4,8 @@ from typing import Dict
 
 from fastapi import APIRouter, HTTPException, status
 
-from schemas.ups import UPSRateRequest, RateResponse
+from schemas.rate_request import RateRequest
+from schemas.rate_response import RateResponse
 from services.usps_service import USPSAddressService, USPSRateService
 from core.exceptions.usps import USPSAPIError
 from core.logging import get_logger
@@ -73,7 +74,7 @@ async def validate_usps_address(
 
 
 @router.post("/rates", response_model=RateResponse, summary="Get USPS rates (matching UPS format)")
-async def get_usps_rates(request: UPSRateRequest) -> RateResponse:
+async def get_usps_rates(request: RateRequest) -> RateResponse:
   """
   Get USPS shipping rates - compatible with UPS microservice request format.
 

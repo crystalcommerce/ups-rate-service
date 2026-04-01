@@ -8,7 +8,8 @@ from typing import List, Optional, Dict, Any
 from core.config import settings
 from core.logging import get_logger
 
-from schemas.ups import UPSRateRequest, RateQuote
+from schemas.rate_request import RateRequest
+from schemas.rate_response import RateQuote
 from core.exceptions.usps import USPSAPIError
 from auth.usps_oauth import USPSOauth
 
@@ -120,7 +121,7 @@ class USPSRateService:
   def _is_domestic(self, sender_country: str, destination_country: str) -> bool:
     return sender_country.upper() == "US" and destination_country.upper() == "US"
 
-  def _build_letter_payload(self, request: UPSRateRequest) -> Optional[Dict[str, Any]]:
+  def _build_letter_payload(self, request: RateRequest) -> Optional[Dict[str, Any]]:
     if not self._is_domestic(request.sender_country, request.country):
       return None
 
@@ -152,7 +153,7 @@ class USPSRateService:
     logger.info(f"[LETTER-RATES] USPS LetterRatesQuery payload: {payload}")
     return payload
 
-  def _build_rate_payload(self, request: UPSRateRequest) -> Dict[str, Any]:
+  def _build_rate_payload(self, request: RateRequest) -> Dict[str, Any]:
     is_domestic = self._is_domestic(request.sender_country, request.country)
     if not request.sender_zip:
       raise ValueError("sender_zip is required for USPS rate calculation")
@@ -177,7 +178,7 @@ class USPSRateService:
 
     return payload
 
-  async def get_rates(self, request: UPSRateRequest, request_id: str = None) -> List[RateQuote]:
+  async def get_rates(self, request: RateRequest, request_id: str = None) -> List[RateQuote]:
     start_time = time.time()
     if request_id is None:
       request_id = f"usps_rate_{int(time.time() * 1000)}"

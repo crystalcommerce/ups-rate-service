@@ -11,7 +11,8 @@ from core.logging import get_logger
 from core.constants.ups import UPSConstants
 from core.exceptions import UPSAPIError
 
-from schemas.ups import UPSRateRequest, RateQuote
+from schemas.rate_request import RateRequest
+from schemas.rate_response import RateQuote
 from auth.ups_oauth import UPSOauth
 
 
@@ -43,7 +44,7 @@ class UPSRatingService:
     # Return None for frontend compatibility
     return None
   
-  async def get_rates(self, request: UPSRateRequest, request_id: str = None, shop_rates: bool = True) -> List[RateQuote]:
+  async def get_rates(self, request: RateRequest, request_id: str = None, shop_rates: bool = True) -> List[RateQuote]:
     """Get shipping rates from UPS API"""
     start_time = time.time()
     
@@ -80,7 +81,7 @@ class UPSRatingService:
       logger.error(f"Rate request {local_request_id} failed after {processing_time:.2f}ms: {str(e)}")
       raise
   
-  def _build_rate_payload(self, request: UPSRateRequest, shop_rates: bool = True, request_id: str = None) -> Dict[str, Any]:
+  def _build_rate_payload(self, request: RateRequest, shop_rates: bool = True, request_id: str = None) -> Dict[str, Any]:
     """Build UPS API request payload"""
     
     service_code = UPSConstants.SERVICES.get(request.service, "03")

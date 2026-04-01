@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 import time
 import logging
 
-from schemas.ups import UPSRateRequest, RateResponse
+from schemas.rate_request import RateRequest
+from schemas.rate_response import RateResponse
 from services.ups_service import UPSRatingService
 from core.constants.ups import UPSConstants
 from core.exceptions.ups import UPSAPIError
@@ -14,10 +15,10 @@ router = APIRouter(prefix="/ups", tags=["UPS"])
 
 
 # Main endpoint - Ruby compatible
-@router.post("/rates", response_model=RateResponse, summary="Get UPS rates (Ruby UPSRateRequest compatible)")
-async def get_ups_rates(request: UPSRateRequest) -> RateResponse:
+@router.post("/rates", response_model=RateResponse, summary="Get UPS rates (Ruby RateRequest compatible)")
+async def get_ups_rates(request: RateRequest) -> RateResponse:
   """
-  Get UPS shipping rates - 100% compatible with Ruby UPSRateRequest class.
+  Get UPS shipping rates - 100% compatible with Ruby RateRequest class.
   
   Supports all the same parameters and logic as the original Ruby implementation:
   - All service types (next_day, 2_day, ground, worldwide_express, etc.)
@@ -120,7 +121,7 @@ async def validate_request(
 
   try:
     # Create request object
-    request = UPSRateRequest(
+    request = RateRequest(
       sender_country=sender_country,
       country=country,
       weight=weight,
