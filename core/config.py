@@ -36,6 +36,15 @@ class Settings:
     UPS_RATE_URL = "https://wwwcie.ups.com/api/rating/v1/Rate"
 
   # -------------------------
+  # FedEx (REQUIRED)
+  # -------------------------
+  FEDEX_CLIENT_ID = require_env("FEDEX_CLIENT_ID")
+  FEDEX_CLIENT_SECRET = require_env("FEDEX_CLIENT_SECRET")
+  FEDEX_ACCOUNT_NUMBER = require_env("FEDEX_ACCOUNT_NUMBER")
+
+  FEDEX_BASE_URL = os.getenv("FEDEX_BASE_URL", "https://apis-sandbox.fedex.com")
+
+  # -------------------------
   # USPS (REQUIRED)
   # -------------------------
   USPS_CLIENT_ID = require_env("USPS_CLIENT_ID")
