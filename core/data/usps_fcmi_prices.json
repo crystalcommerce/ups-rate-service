@@ -1,0 +1,43 @@
+{
+  "_status": "DRAFT — NOT VERIFIED. Anchor prices (postcard/letter <=1oz = 1.70, large envelope start = 3.15) are from third-party rate charts; every other number is a structural PLACEHOLDER. Replace the whole file with values from USPS Notice 123 before deploy (Phase 5).",
+  "_schema": "Each shape has 'pricing' ('worldwide' = tiers carry 'price'; 'price_group' = tiers carry 'prices' keyed by price group). Tiers are ordered ascending by 'max_oz'; the first tier whose max_oz >= weight wins.",
+  "effective_date": "2026-04-26",
+  "source": "DRAFT (third-party rate charts)",
+  "verified_against_notice_123": false,
+  "currency": "USD",
+  "max_weight_oz": {
+    "postcard": 1.0,
+    "letter": 3.5,
+    "large_envelope": 15.994
+  },
+  "postcard": {
+    "service_name": "First-Class Mail International Postcards",
+    "pricing": "worldwide",
+    "tiers": [
+      { "max_oz": 1.0, "price": 1.70 }
+    ]
+  },
+  "letter": {
+    "_note": "Drafted as a single worldwide price per weight tier. VERIFY: some sources suggest letters >1oz are price-group based — if so, change 'pricing' to 'price_group' and give each tier a 'prices' map. The pricing module already supports both.",
+    "service_name": "First-Class Mail International Letters",
+    "pricing": "worldwide",
+    "tiers": [
+      { "max_oz": 1.0, "price": 1.70 },
+      { "max_oz": 2.0, "price": 2.54 },
+      { "max_oz": 3.0, "price": 3.38 },
+      { "max_oz": 3.5, "price": 3.80 }
+    ]
+  },
+  "large_envelope": {
+    "service_name": "First-Class Mail International Large Envelopes",
+    "pricing": "price_group",
+    "tiers": [
+      { "max_oz": 1.0,    "prices": { "1": 3.15, "2": 3.60, "3": 4.05, "4": 4.50, "5": 4.95, "6": 5.40, "7": 5.85, "8": 6.30, "9": 6.75 } },
+      { "max_oz": 2.0,    "prices": { "1": 4.35, "2": 4.80, "3": 5.25, "4": 5.70, "5": 6.15, "6": 6.60, "7": 7.05, "8": 7.50, "9": 7.95 } },
+      { "max_oz": 4.0,    "prices": { "1": 5.95, "2": 6.40, "3": 6.85, "4": 7.30, "5": 7.75, "6": 8.20, "7": 8.65, "8": 9.10, "9": 9.55 } },
+      { "max_oz": 8.0,    "prices": { "1": 8.75, "2": 9.20, "3": 9.65, "4": 10.10, "5": 10.55, "6": 11.00, "7": 11.45, "8": 11.90, "9": 12.35 } },
+      { "max_oz": 12.0,   "prices": { "1": 11.55, "2": 12.00, "3": 12.45, "4": 12.90, "5": 13.35, "6": 13.80, "7": 14.25, "8": 14.70, "9": 15.15 } },
+      { "max_oz": 15.994, "prices": { "1": 13.95, "2": 14.40, "3": 14.85, "4": 15.30, "5": 15.75, "6": 16.20, "7": 16.65, "8": 17.10, "9": 17.55 } }
+    ]
+  }
+}

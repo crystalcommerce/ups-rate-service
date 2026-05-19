@@ -69,6 +69,10 @@ class RateRequest(BaseModel):
   insured_value: float = Field(0, ge=0, description="Insured value")
   currency_code: str = Field("USD", description="Currency code")
 
+  @validator('sender_country', 'country')
+  def normalize_country(cls, v):
+    return v.upper() if v else v
+
   @validator('service')
   def validate_service(cls, v):
     if v not in UPSConstants.SERVICES:
