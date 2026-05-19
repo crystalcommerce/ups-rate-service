@@ -1,0 +1,11 @@
+{
+  "_status": "VERIFIED 2026-05-19. FCMI uses 9 price groups, but in the current USPS Notice 123 the 3-5 and 6-9 columns are identical for letters, postcards AND large envelopes — i.e. groups 3-9 are price-equivalent. So only Canada (group 1) and Mexico (group 2) need explicit mapping; every other destination resolves to default_group 3 and gets the correct FCMI price. If a future Notice 123 ever splits the 3-5 / 6-9 columns, expand this file into a full country->group map from the USPS IMM 'Country Price Groups and Weight Limits'.",
+  "_schema": "'groups' maps a 2-letter ISO-3166 country code to a FCMI price group integer. Countries not listed fall back to 'default_group'. Group keys must match the price-group keys in usps_fcmi_prices.json.",
+  "source": "USPS Notice 123 FCMI price-group column structure",
+  "verified_against_immpg": true,
+  "default_group": 3,
+  "groups": {
+    "CA": 1,
+    "MX": 2
+  }
+}
