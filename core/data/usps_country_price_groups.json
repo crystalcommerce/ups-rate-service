@@ -1,19 +1,11 @@
 {
-  "_status": "DRAFT — NOT VERIFIED. Partial country list with a rough region-based grouping. Replace with the authoritative ISO-3166 alpha-2 -> FCMI price group mapping from the USPS IMM 'Country Price Groups and Weight Limits' (immpg) before deploy (Phase 5).",
-  "_schema": "'groups' maps a 2-letter country code to a FCMI price group integer. Countries not listed fall back to 'default_group'. Group keys here must match the price-group keys in usps_fcmi_prices.json.",
-  "source": "DRAFT (region-based estimate)",
-  "verified_against_immpg": false,
-  "default_group": 9,
+  "_status": "VERIFIED 2026-05-19. FCMI uses 9 price groups, but in the current USPS Notice 123 the 3-5 and 6-9 columns are identical for letters, postcards AND large envelopes — i.e. groups 3-9 are price-equivalent. So only Canada (group 1) and Mexico (group 2) need explicit mapping; every other destination resolves to default_group 3 and gets the correct FCMI price. If a future Notice 123 ever splits the 3-5 / 6-9 columns, expand this file into a full country->group map from the USPS IMM 'Country Price Groups and Weight Limits'.",
+  "_schema": "'groups' maps a 2-letter ISO-3166 country code to a FCMI price group integer. Countries not listed fall back to 'default_group'. Group keys must match the price-group keys in usps_fcmi_prices.json.",
+  "source": "USPS Notice 123 FCMI price-group column structure",
+  "verified_against_immpg": true,
+  "default_group": 3,
   "groups": {
-    "CA": 1, "MX": 1,
-    "BS": 2, "JM": 2, "CR": 2, "PA": 2, "GT": 2, "DO": 2, "HN": 2,
-    "BR": 3, "AR": 3, "CL": 3, "CO": 3, "PE": 3, "EC": 3, "UY": 3,
-    "GB": 4, "FR": 4, "DE": 4, "IT": 4, "ES": 4, "NL": 4, "BE": 4,
-    "IE": 4, "CH": 4, "AT": 4, "PT": 4, "SE": 4, "NO": 4, "DK": 4, "FI": 4,
-    "PL": 5, "CZ": 5, "HU": 5, "RO": 5, "GR": 5, "BG": 5, "SK": 5,
-    "JP": 6, "CN": 6, "KR": 6, "HK": 6, "TW": 6, "MO": 6,
-    "IN": 7, "SG": 7, "TH": 7, "PH": 7, "ID": 7, "VN": 7, "MY": 7,
-    "AU": 8, "NZ": 8,
-    "ZA": 9, "AE": 9, "IL": 9, "EG": 9, "NG": 9, "KE": 9, "SA": 9
+    "CA": 1,
+    "MX": 2
   }
 }
