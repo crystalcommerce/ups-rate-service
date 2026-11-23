@@ -16,12 +16,12 @@ router = APIRouter(
 @router.get("/health")
 async def health_check():
   try:
-    oauth = UPSOauth()
-
+    # Health answers whether this process is serving, so it never fetches a token: a token call
+    # that hangs would make every health check hang with it. It reports the cached UPS token as
+    # "cached" or "not_cached"; rate requests fetch (and report) tokens themselves.
     token_start = time.time()
-    token = oauth.get_token()
+    token_status = "cached" if UPSOauth()._is_token_valid() else "not_cached"
     token_time = (time.time() - token_start) * 1000
-    token_status = "ok" if token else "failed"
 
     connectivity_start = time.time()
 
@@ -36,10 +36,7 @@ async def health_check():
 
     connectivity_time = (time.time() - connectivity_start) * 1000
 
-    is_healthy = (
-      token_status == "ok" and
-      connectivity_status in ["ok", "degraded"]
-    )
+    is_healthy = connectivity_status in ["ok", "degraded"]
 
     response_body = {
       "status": "healthy" if is_healthy else "unhealthy",

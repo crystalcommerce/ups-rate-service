@@ -56,7 +56,7 @@ class UPSRatingService:
     try:
       request.validate_required_fields()
       
-      token = self.auth.get_token()
+      token = await asyncio.to_thread(self.auth.get_token)
       
       payload = self._build_rate_payload(request, shop_rates, local_request_id)
       

@@ -38,7 +38,7 @@ class USPSOauth:
       "Content-Type": "application/x-www-form-urlencoded"
     }
 
-    response = requests.post(self.url, data=payload, headers=headers)
+    response = requests.post(self.url, data=payload, headers=headers, timeout=settings.OUTBOUND_TIMEOUT)
 
     if response.status_code != 200:
       raise USPSAPIError(

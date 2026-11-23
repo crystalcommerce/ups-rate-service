@@ -15,6 +15,13 @@ class Settings:
   DEBUG = os.getenv("DEBUG", "false").lower() == "true"
   LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
   AUTH_TOKEN = os.getenv("AUTH_TOKEN", "")
+  # (connect, read) seconds for every synchronous call to a carrier (OAuth tokens, FedEx rates).
+  # Without one, a carrier connection that goes silent waits for the kernel to drop it
+  # (tcp_retries2, about 15.5 minutes).
+  OUTBOUND_TIMEOUT = (
+    float(os.getenv("OUTBOUND_CONNECT_TIMEOUT", "3")),
+    float(os.getenv("OUTBOUND_READ_TIMEOUT", "10")),
+  )
 
 
   # -------------------------

@@ -14,7 +14,7 @@ service = FedexService()
 
 
 @router.post("/rates", summary="Get FedEx shipping rates")
-async def get_fedex_rates(payload: Dict[str, Any]) -> Dict[str, Any]:
+def get_fedex_rates(payload: Dict[str, Any]) -> Dict[str, Any]:
   """
   Get FedEx shipping rates.
 

@@ -57,7 +57,7 @@ class FedexService:
       }
 
       try:
-        response = requests.post(url, json=payload, headers=headers)
+        response = requests.post(url, json=payload, headers=headers, timeout=settings.OUTBOUND_TIMEOUT)
         if response.status_code < 400:
           return response.json()
 

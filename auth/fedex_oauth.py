@@ -34,7 +34,7 @@ class FedexOauth:
       "Content-Type": "application/x-www-form-urlencoded"
     }
 
-    response = requests.post(url, data=payload, headers=headers)
+    response = requests.post(url, data=payload, headers=headers, timeout=settings.OUTBOUND_TIMEOUT)
     response.raise_for_status()
 
     data = response.json()

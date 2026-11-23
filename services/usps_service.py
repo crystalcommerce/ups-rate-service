@@ -35,7 +35,7 @@ class USPSAddressService:
       await self.client.aclose()
 
   async def validate_address(self, street_address: str, city: str, state: str) -> Dict[str, str]:
-    token = usps_oauth.get_token(scope="addresses")
+    token = await asyncio.to_thread(usps_oauth.get_token, scope="addresses")
 
     params = {
       "streetAddress": street_address,
@@ -185,7 +185,7 @@ class USPSRateService:
     try:
       is_domestic = request.is_domestic_us()
       scope = "domestic-prices" if is_domestic else "international-prices"
-      token = usps_oauth.get_token(scope=scope)
+      token = await asyncio.to_thread(usps_oauth.get_token, scope=scope)
 
       payload = self._build_rate_payload(request)
       api_url = settings.USPS_DOMESTIC_RATES_URL if is_domestic else settings.USPS_INTERNATIONAL_RATES_URL
