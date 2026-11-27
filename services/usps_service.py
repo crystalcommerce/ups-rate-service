@@ -16,6 +16,10 @@ from services.usps_fcmi import get_fcmi_quotes
 
 logger = get_logger(__name__)
 
+# USPS's smallest international parcel (First-Class Package International Service), inches.
+INTERNATIONAL_MIN_LENGTH_IN = 6.0
+INTERNATIONAL_MIN_WIDTH_IN = 4.0
+
 usps_oauth = USPSOauth()
 
 
@@ -170,6 +174,12 @@ class USPSRateService:
     if is_domestic:
       payload["destinationZIPCode"] = request.zip
     else:
+      # USPS prices no First-Class Package International Service below its minimum
+      # parcel size (6 x 4 in): at the 1 x 1 x 1 default it answered only Priority
+      # classes, so a 0.5 lb parcel to Toronto started at $43 instead of $18.48
+      # (Category One, 2026-11-27). Priority prices don't change at this size.
+      payload["length"] = max(payload["length"], INTERNATIONAL_MIN_LENGTH_IN)
+      payload["width"] = max(payload["width"], INTERNATIONAL_MIN_WIDTH_IN)
       payload["destinationCountryCode"] = request.country
       if request.zip:
         payload["foreignPostalCode"] = request.zip
